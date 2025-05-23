@@ -104,6 +104,10 @@ func UpdateComponentCloudAttributes(ctx context.Context, c *app.AppClient, id st
 	if !ok {
 		return fmt.Errorf("no components %T", part.RobotConfig["components"])
 	}
+	services, ok := part.RobotConfig["services"].([]interface{})
+	if ok {
+		cs = append(cs, services...)
+	}
 
 	found := false
 

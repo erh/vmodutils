@@ -11,7 +11,6 @@ import (
 	"go.viam.com/rdk/components/arm"
 	toggleswitch "go.viam.com/rdk/components/switch"
 	"go.viam.com/rdk/logging"
-	"go.viam.com/rdk/motionplan/armplanning"
 	"go.viam.com/rdk/referenceframe"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/robot/framesystem"
@@ -237,13 +236,13 @@ func (aps *ArmPositionSaver) goToSavePosition(ctx context.Context) error {
 		if _, ok := currentInputs[aps.arm.Name().Name]; !ok {
 			return fmt.Errorf("expected arm %s to be returned from framesystem service CurrentInputs", aps.arm.Name().Name)
 		}
-		extra["start_state"] = armplanning.NewPlanState(nil, currentInputs).Serialize()
+		extra["start_state"] = serialize(currentInputs)
 
 		// goal state expressed in joint positions so we are confident the arm is not blocking the
 		// view of the imaging target
 		goalFrameSystemInputs := currentInputs
 		goalFrameSystemInputs[aps.arm.Name().Name] = referenceframe.FloatsToInputs(aps.cfg.Joints)
-		extra["goal_state"] = armplanning.NewPlanState(nil, goalFrameSystemInputs).Serialize()
+		extra["goal_state"] = serialize(goalFrameSystemInputs)
 		_, err = aps.motion.Move(ctx, motion.MoveReq{
 			ComponentName: aps.cfg.Arm,
 			WorldState:    worldState,
@@ -295,4 +294,14 @@ func (aps *ArmPositionSaver) goToSavePosition(ctx context.Context) error {
 	}
 
 	return fmt.Errorf("need to configure where to go")
+}
+
+func serialize(inputs referenceframe.FrameSystemInputs) map[string]any {
+	m := map[string]interface{}{}
+	confMap := map[string]interface{}{}
+	for fName, conf := range inputs {
+		confMap[fName] = referenceframe.InputsToFloats(conf)
+	}
+	m["configuration"] = confMap
+	return m
 }

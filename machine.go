@@ -159,7 +159,7 @@ func updateComponentAttributesInPlace(ctx context.Context, robotConfig map[strin
 func updateComponentOrServiceConfig(robotConfig map[string]interface{}, name resource.Name, newAttr utils.AttributeMap) (bool, error) {
 	cs, ok := robotConfig["components"].([]interface{})
 	if !ok {
-		return false, fmt.Errorf("no components %T", robotConfig["components"])
+		cs = []interface{}{}
 	}
 	services, ok := robotConfig["services"].([]interface{})
 	if ok {
@@ -206,20 +206,34 @@ func updateFragmentConfig(id, fragModString string, robotConfig, fragmentMod map
 			break
 		}
 		// the fragment has mods, check the sets to see if our component is configured
+		foundMod := false
 		for indexMods, mod := range mods {
 			modc, _ := mod.(map[string]interface{})
 			sets, _ := modc["$set"].(map[string]interface{})
-			// check the keys to see if the set if for our component
+			// check the keys to see if the set is for our component
 			for k := range sets {
 				if strings.Contains(k, fragModString) {
 					// we found our component, go ahead and replace the component's mods
 					mods[indexMods] = fragmentMod
-					return nil
+					foundMod = true
+					continue
+				}
+			}
+			unsets, ok := modc["$unset"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			for k := range unsets {
+				if strings.Contains(k, fragModString) {
+					// found an unset for our mod, delete it
+					delete(unsets, k)
 				}
 			}
 		}
-		// we found mods but we did not find any for our component. add a new set of mods
-		fragModc["mods"] = append(mods, fragmentMod)
+		if !foundMod {
+			// we found mods but we did not find any for our component. add a new set of mods
+			fragModc["mods"] = append(mods, fragmentMod)
+		}
 		return nil
 	}
 	// we don't have any fragment mods, so add a new set of mods to the config

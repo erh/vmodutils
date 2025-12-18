@@ -89,7 +89,7 @@ func TestMultiArmPositionSwitchValidate(t *testing.T) {
 	}
 }
 
-func TestMultiArmPositionSwitchSetPosition(t *testing.T) {
+func TestMultiArmPositionSwitchSetPositionAndGetPosition(t *testing.T) {
 	const path = "components.0"
 	ctx := context.Background()
 	logger := logging.NewTestLogger(t)
@@ -170,12 +170,20 @@ func TestMultiArmPositionSwitchSetPosition(t *testing.T) {
 		test.That(t, fakeVision1GetObjectPointCloudsCallCount, test.ShouldEqual, 1)
 		test.That(t, fakeVision2GetObjectPointCloudsCallCount, test.ShouldEqual, 1)
 
+		position, err := s.GetPosition(ctx, nil)
+		test.That(t, err, test.ShouldBeNil)
+		test.That(t, position, test.ShouldEqual, 0)
+
 		err = s.SetPosition(ctx, 1, nil)
 		test.That(t, err, test.ShouldBeNil)
 		test.That(t, fakeArmMoveToJointPositionsCallCount, test.ShouldEqual, 0)
 		test.That(t, fakeMotionMoveCallCount, test.ShouldEqual, 2)
 		test.That(t, fakeVision1GetObjectPointCloudsCallCount, test.ShouldEqual, 2)
 		test.That(t, fakeVision2GetObjectPointCloudsCallCount, test.ShouldEqual, 2)
+
+		position, err = s.GetPosition(ctx, nil)
+		test.That(t, err, test.ShouldBeNil)
+		test.That(t, position, test.ShouldEqual, 1)
 	})
 
 	t.Run("SetPosition uses only arm.MoveToJointPositions when motion service is not configured", func(t *testing.T) {
@@ -225,8 +233,16 @@ func TestMultiArmPositionSwitchSetPosition(t *testing.T) {
 		test.That(t, err, test.ShouldBeNil)
 		test.That(t, fakeArmMoveToJointPositionsCallCount, test.ShouldEqual, 1)
 
+		position, err := s.GetPosition(ctx, nil)
+		test.That(t, err, test.ShouldBeNil)
+		test.That(t, position, test.ShouldEqual, 0)
+
 		err = s.SetPosition(ctx, 1, nil)
 		test.That(t, err, test.ShouldBeNil)
 		test.That(t, fakeArmMoveToJointPositionsCallCount, test.ShouldEqual, 2)
+
+		position, err = s.GetPosition(ctx, nil)
+		test.That(t, err, test.ShouldBeNil)
+		test.That(t, position, test.ShouldEqual, 1)
 	})
 }

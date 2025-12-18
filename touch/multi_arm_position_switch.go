@@ -3,6 +3,7 @@ package touch
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"go.viam.com/rdk/components/arm"
 	toggleswitch "go.viam.com/rdk/components/switch"
@@ -118,6 +119,10 @@ type MultiArmPositionSwitch struct {
 	motion         motion.Service
 	visionServices []vision.Service
 	fsSvc          framesystem.Service
+
+	// mu protects access to 'position'
+	mu       sync.Mutex
+	position uint32
 }
 
 func (maps *MultiArmPositionSwitch) Name() resource.Name {
@@ -132,11 +137,22 @@ func (maps *MultiArmPositionSwitch) SetPosition(ctx context.Context, position ui
 	if position > uint32(len(maps.cfg.JointsList))-1 {
 		return fmt.Errorf("requested position %d is greater than highest possible position %d", position, len(maps.cfg.JointsList)-1)
 	}
-	return maps.goToPosition(ctx, maps.cfg.JointsList[position])
+	err := maps.goToPosition(ctx, maps.cfg.JointsList[position])
+	if err != nil {
+		return err
+	}
+
+	maps.mu.Lock()
+	defer maps.mu.Unlock()
+	maps.position = position
+
+	return nil
 }
 
 func (maps *MultiArmPositionSwitch) GetPosition(ctx context.Context, extra map[string]interface{}) (uint32, error) {
-	return 0, nil
+	maps.mu.Lock()
+	defer maps.mu.Unlock()
+	return maps.position, nil
 }
 
 func (maps *MultiArmPositionSwitch) GetNumberOfPositions(ctx context.Context, extra map[string]interface{}) (uint32, []string, error) {

@@ -311,7 +311,9 @@ func goToPositionUsingJointToJointMotion(
 	// Express the goal state in joint positions
 	goalFrameSystemInputs := make(referenceframe.FrameSystemInputs)
 	goalFrameSystemInputs[armName] = joints
-	if extra["goal_state"] != nil {
+	if extra == nil {
+		extra = make(map[string]any)
+	} else if extra["goal_state"] != nil {
 		return fmt.Errorf("cannot provide 'goal_state' in 'extra' when using joint to joint motion")
 	}
 	extra["goal_state"] = serialize(goalFrameSystemInputs)

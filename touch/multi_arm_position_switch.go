@@ -49,9 +49,7 @@ func (c *MultiArmPositionSwitchConfig) Validate(path string) ([]string, []string
 		}
 	}
 
-	if len(c.VisionServices) > 0 {
-		deps = append(deps, c.VisionServices...)
-	}
+    deps = append(deps, c.VisionServices...)
 
 	return deps, nil, nil
 }
@@ -81,14 +79,12 @@ func newMultiArmPositionSwitch(ctx context.Context, deps resource.Dependencies, 
 		}
 	}
 
-	if len(newConf.VisionServices) > 0 {
-		for _, name := range newConf.VisionServices {
-			v, err := vision.FromProvider(deps, name)
-			if err != nil {
-				return nil, err
-			}
-			maps.visionServices = append(maps.visionServices, v)
+	for _, name := range newConf.VisionServices {
+		v, err := vision.FromProvider(deps, name)
+		if err != nil {
+			return nil, err
 		}
+		maps.visionServices = append(maps.visionServices, v)
 	}
 
 	maps.fsSvc, err = framesystem.FromDependencies(deps)
@@ -118,7 +114,7 @@ func (maps *MultiArmPositionSwitch) Name() resource.Name {
 }
 
 func (maps *MultiArmPositionSwitch) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
-	return nil, fmt.Errorf("Do command unimplemented")
+	return nil, resource.ErrDoUnimplemented
 }
 
 func (maps *MultiArmPositionSwitch) SetPosition(ctx context.Context, position uint32, extra map[string]interface{}) error {
@@ -134,7 +130,7 @@ func (maps *MultiArmPositionSwitch) GetPosition(ctx context.Context, extra map[s
 
 func (maps *MultiArmPositionSwitch) GetNumberOfPositions(ctx context.Context, extra map[string]interface{}) (uint32, []string, error) {
 	var positionStrs []string
-	for i := 0; i < len(maps.cfg.JointsList); i++ {
+	for i := range maps.cfg.JointsList {
 		positionStrs = append(positionStrs, fmt.Sprintf("go to %d", i))
 	}
 	return uint32(len(maps.cfg.JointsList)), positionStrs, nil

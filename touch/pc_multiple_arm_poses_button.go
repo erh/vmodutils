@@ -157,7 +157,7 @@ func (mapb *MultipleArmPosesButton) Push(ctx context.Context, extra map[string]a
 	defer mapb.executing.Store(false)
 	mapb.pcMultipleArmPosesButtonCamera.ClearPointCloud()
 	if len(mapb.positions) > 0 {
-		pc, err := GetMergedPointCloudPositions(ctx, mapb.positions, mapb.cfg.sleepTime(), mapb.src, extra, mapb.fsSvc)
+		pc, err := GetMergedPointCloudFromPositions(ctx, mapb.positions, mapb.cfg.sleepTime(), mapb.src, extra, mapb.fsSvc)
 		if err != nil {
 			return err
 		}
@@ -165,7 +165,7 @@ func (mapb *MultipleArmPosesButton) Push(ctx context.Context, extra map[string]a
 		return nil
 	}
 
-	pc, err := GetMergedPointCloudMultiPositionSwitch(ctx, mapb.multiPositionSwitch, mapb.cfg.sleepTime(), mapb.src, extra, mapb.fsSvc)
+	pc, err := GetMergedPointCloudFromMultiPositionSwitch(ctx, mapb.multiPositionSwitch, mapb.cfg.sleepTime(), mapb.src, extra, mapb.fsSvc)
 	if err != nil {
 		return err
 	}

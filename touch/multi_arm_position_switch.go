@@ -37,27 +37,32 @@ type MultiArmPositionSwitchConfig struct {
 }
 
 func (c *MultiArmPositionSwitchConfig) Validate(path string) ([]string, []string, error) {
+	reqDeps := []string{}
+
 	if c.Arm == "" {
 		return nil, nil, resource.NewConfigValidationFieldRequiredError(path, "arm")
 	}
-
-	deps := []string{c.Arm}
+	reqDeps = append(reqDeps, c.Arm)
 
 	if c.Motion != "" {
 		if c.Motion == "builtin" {
-			deps = append(deps, motion.Named("builtin").String())
+			reqDeps = append(reqDeps, motion.Named("builtin").String())
 		} else {
-			deps = append(deps, c.Motion)
+			reqDeps = append(reqDeps, c.Motion)
 		}
 	}
 
-	deps = append(deps, c.VisionServices...)
+	reqDeps = append(reqDeps, c.VisionServices...)
+
+	if len(c.JointsList) == 0 {
+		return nil, nil, ErrMustSpecifyAtLeastOneJointPosition
+	}
 
 	if c.Extra != nil && c.Extra[extraParamsKeyGoalState] != nil {
 		return nil, nil, ErrCannotSpecifyGoalStateInExtra
 	}
 
-	return deps, nil, nil
+	return reqDeps, nil, nil
 }
 
 func newMultiArmPositionSwitch(ctx context.Context, deps resource.Dependencies, config resource.Config, logger logging.Logger) (toggleswitch.Switch, error) {

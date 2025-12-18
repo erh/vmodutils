@@ -8,8 +8,10 @@ import (
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/robot/framesystem"
+	"go.viam.com/rdk/services/motion"
 	"go.viam.com/rdk/testutils/inject"
 	injectMotion "go.viam.com/rdk/testutils/inject/motion"
+	"go.viam.com/rdk/vision"
 	"go.viam.com/test"
 
 	"github.com/erh/vmodutils"
@@ -63,6 +65,13 @@ func TestMultiArmPositionSwitchValidate(t *testing.T) {
 			},
 			expectErr: ErrCannotSpecifyGoalStateInExtra,
 		},
+		{
+			name: "no joint positions specified",
+			modify: func(c *MultiArmPositionSwitchConfig) {
+				c.JointsList = [][]float64{}
+			},
+			expectErr: ErrMustSpecifyAtLeastOneJointPosition,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -80,61 +89,143 @@ func TestMultiArmPositionSwitchValidate(t *testing.T) {
 	}
 }
 
-func TestMuiltiArmPositionSwitchConstructor(t *testing.T) {
+func TestMultiArmPositionSwitchSetPosition(t *testing.T) {
 	const path = "components.0"
 	ctx := context.Background()
 	logger := logging.NewTestLogger(t)
+	t.Run("SetPosition uses motion.Move and vision services when motion service is configured", func(t *testing.T) {
+		fakeArm := inject.NewArm("arm")
+		fakeArmMoveToJointPositionsCallCount := 0
+		fakeArm.MoveToJointPositionsFunc = func(ctx context.Context, joints []float64, extra map[string]any) error {
+			fakeArmMoveToJointPositionsCallCount++
 
-	// create injected resources with distinct labels
-	fakeArm := inject.NewArm("arm")
-	fakeMotion := injectMotion.NewMotionService("builtin")
-	fakeVision1 := inject.NewVisionService("vision1")
-	fakeVision2 := inject.NewVisionService("vision2")
-	fakeFsSvc := inject.NewFrameSystemService(framesystem.PublicServiceName.Name)
+			if fakeArmMoveToJointPositionsCallCount == 1 {
+				test.That(t, joints, test.ShouldResemble, []float64{0.0, 0.0, 0.0})
+			} else if fakeArmMoveToJointPositionsCallCount == 2 {
+				test.That(t, joints, test.ShouldResemble, []float64{1.0, 1.0, 1.0})
+			}
+			return nil
+		}
 
-	allDeps := resource.Dependencies{
-		fakeArm.Name():     fakeArm,
-		fakeMotion.Name():  fakeMotion,
-		fakeVision1.Name(): fakeVision1,
-		fakeVision2.Name(): fakeVision2,
-		fakeFsSvc.Name():   fakeFsSvc,
-	}
-	baseConfig := &MultiArmPositionSwitchConfig{
-		Arm:            "arm",
-		Motion:         "builtin",
-		VisionServices: []string{"vision1", "vision2"},
-	}
-	_, _, err := baseConfig.Validate(path)
-	test.That(t, err, test.ShouldBeNil)
+		fakeMotion := injectMotion.NewMotionService("builtin")
+		fakeMotionMoveCallCount := 0
+		fakeMotion.MoveFunc = func(ctx context.Context, req motion.MoveReq) (bool, error) {
+			fakeMotionMoveCallCount++
+			return true, nil
+		}
 
-	cfg := resource.Config{
-		Name: "multi_arm_position_switch",
-		API:  toggleswitch.API,
-		Model: resource.Model{
-			Family: vmodutils.NamespaceFamily,
-		},
-		ConvertedAttributes: baseConfig,
-	}
+		fakeVision1 := inject.NewVisionService("vision1")
+		fakeVision1GetObjectPointCloudsCallCount := 0
+		fakeVision1.GetObjectPointCloudsFunc = func(ctx context.Context, cameraName string, extra map[string]interface{}) ([]*vision.Object, error) {
+			fakeVision1GetObjectPointCloudsCallCount++
+			return nil, nil
+		}
 
-	t.Run("succeeds with basic config", func(t *testing.T) {
+		fakeVision2 := inject.NewVisionService("vision2")
+		fakeVision2GetObjectPointCloudsCallCount := 0
+		fakeVision2.GetObjectPointCloudsFunc = func(ctx context.Context, cameraName string, extra map[string]interface{}) ([]*vision.Object, error) {
+			fakeVision2GetObjectPointCloudsCallCount++
+			return nil, nil
+		}
+
+		fakeFsSvc := inject.NewFrameSystemService(framesystem.PublicServiceName.Name)
+
+		allDeps := resource.Dependencies{
+			fakeArm.Name():     fakeArm,
+			fakeMotion.Name():  fakeMotion,
+			fakeVision1.Name(): fakeVision1,
+			fakeVision2.Name(): fakeVision2,
+			fakeFsSvc.Name():   fakeFsSvc,
+		}
+
+		baseConfig := &MultiArmPositionSwitchConfig{
+			Arm:            "arm",
+			JointsList:     [][]float64{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}},
+			Motion:         "builtin",
+			VisionServices: []string{"vision1", "vision2"},
+		}
+		_, _, err := baseConfig.Validate(path)
+		test.That(t, err, test.ShouldBeNil)
+
+		cfg := resource.Config{
+			Name: "multi_arm_position_switch",
+			API:  toggleswitch.API,
+			Model: resource.Model{
+				Family: vmodutils.NamespaceFamily,
+			},
+			ConvertedAttributes: baseConfig,
+		}
+
 		res, err := newMultiArmPositionSwitch(ctx, allDeps, cfg, logger)
 		test.That(t, err, test.ShouldBeNil)
-		test.That(t, res, test.ShouldNotBeNil)
-
 		s, ok := res.(*MultiArmPositionSwitch)
 		test.That(t, ok, test.ShouldBeTrue)
+		test.That(t, s, test.ShouldNotBeNil)
 
-		test.That(t, s.cfg.Motion, test.ShouldEqual, resource.DefaultServiceName)
+		err = s.SetPosition(ctx, 0, nil)
+		test.That(t, err, test.ShouldBeNil)
+		test.That(t, fakeArmMoveToJointPositionsCallCount, test.ShouldEqual, 0)
+		test.That(t, fakeMotionMoveCallCount, test.ShouldEqual, 1)
+		test.That(t, fakeVision1GetObjectPointCloudsCallCount, test.ShouldEqual, 1)
+		test.That(t, fakeVision2GetObjectPointCloudsCallCount, test.ShouldEqual, 1)
+
+		err = s.SetPosition(ctx, 1, nil)
+		test.That(t, err, test.ShouldBeNil)
+		test.That(t, fakeArmMoveToJointPositionsCallCount, test.ShouldEqual, 0)
+		test.That(t, fakeMotionMoveCallCount, test.ShouldEqual, 2)
+		test.That(t, fakeVision1GetObjectPointCloudsCallCount, test.ShouldEqual, 2)
+		test.That(t, fakeVision2GetObjectPointCloudsCallCount, test.ShouldEqual, 2)
 	})
 
-	/*
-		withConfig := func(mod func(*MultiArmPositionSwitchConfig)) resource.Config {
-			c := *baseConfig
-			mod(&c)
-			newCfg := cfg
-			newCfg.ConvertedAttributes = &c
-			return newCfg
-		}
-	*/
+	t.Run("SetPosition uses only arm.MoveToJointPositions when motion service is not configured", func(t *testing.T) {
+		fakeArm := inject.NewArm("arm")
+		fakeArmMoveToJointPositionsCallCount := 0
+		fakeArm.MoveToJointPositionsFunc = func(ctx context.Context, joints []float64, extra map[string]any) error {
+			fakeArmMoveToJointPositionsCallCount++
 
+			if fakeArmMoveToJointPositionsCallCount == 1 {
+				test.That(t, joints, test.ShouldResemble, []float64{0.0, 0.0, 0.0})
+			} else if fakeArmMoveToJointPositionsCallCount == 2 {
+				test.That(t, joints, test.ShouldResemble, []float64{1.0, 1.0, 1.0})
+			}
+			return nil
+		}
+
+		fakeFsSvc := inject.NewFrameSystemService(framesystem.PublicServiceName.Name)
+
+		allDeps := resource.Dependencies{
+			fakeArm.Name():   fakeArm,
+			fakeFsSvc.Name(): fakeFsSvc,
+		}
+
+		baseConfig := &MultiArmPositionSwitchConfig{
+			Arm:        "arm",
+			JointsList: [][]float64{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}},
+		}
+		_, _, err := baseConfig.Validate(path)
+		test.That(t, err, test.ShouldBeNil)
+
+		cfg := resource.Config{
+			Name: "multi_arm_position_switch",
+			API:  toggleswitch.API,
+			Model: resource.Model{
+				Family: vmodutils.NamespaceFamily,
+			},
+			ConvertedAttributes: baseConfig,
+		}
+
+		res, err := newMultiArmPositionSwitch(ctx, allDeps, cfg, logger)
+		test.That(t, err, test.ShouldBeNil)
+		s, ok := res.(*MultiArmPositionSwitch)
+		test.That(t, ok, test.ShouldBeTrue)
+		test.That(t, s, test.ShouldNotBeNil)
+
+		err = s.SetPosition(ctx, 0, nil)
+		test.That(t, err, test.ShouldBeNil)
+		test.That(t, fakeArmMoveToJointPositionsCallCount, test.ShouldEqual, 1)
+
+		err = s.SetPosition(ctx, 1, nil)
+		test.That(t, err, test.ShouldBeNil)
+		test.That(t, fakeArmMoveToJointPositionsCallCount, test.ShouldEqual, 2)
+	})
 }

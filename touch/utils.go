@@ -229,7 +229,7 @@ func GetApproachPoint(p r3.Vector, deltaLinear float64, o *spatialmath.Orientati
 	return approachPoint
 }
 
-func GetMergedPointCloud(ctx context.Context, positions []toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]interface{}, fsSvc framesystem.Service) (pointcloud.PointCloud, error) {
+func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service) (pointcloud.PointCloud, error) {
 	pcsInWorld := []pointcloud.PointCloud{}
 	totalSize := 0
 
@@ -273,6 +273,7 @@ func GetMergedPointCloud(ctx context.Context, positions []toggleswitch.Switch, s
 
 	return big, nil
 }
+
 
 func buildWorldStateWithObstacles(ctx context.Context, visionSvcs []vision.Service) (*referenceframe.WorldState, error) {
 	var obstacles []*referenceframe.GeometriesInFrame
@@ -405,4 +406,52 @@ func serialize(inputs referenceframe.FrameSystemInputs) map[string]any {
 	}
 	m["configuration"] = confMap
 	return m
+
+func GetMergedPointCloudFromMultiPositionSwitch(ctx context.Context, s toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service) (pointcloud.PointCloud, error) {
+	pcsInWorld := []pointcloud.PointCloud{}
+	totalSize := 0
+
+	numPositions, _, err := s.GetNumberOfPositions(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	for i := range numPositions {
+		err := s.SetPosition(ctx, i, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		// Sleep between movements to allow for any vibrations to settle
+		time.Sleep(sleepTime)
+
+		pc, err := srcCamera.NextPointCloud(ctx, extraForCamera)
+		if err != nil {
+			return nil, err
+		}
+
+		totalSize += pc.Size()
+
+		// Transform this point cloud into the world frame
+		pif, err := fsSvc.GetPose(ctx, srcCamera.Name().Name, "", nil, nil)
+		if err != nil {
+			return nil, err
+		}
+		pcInWorld := pointcloud.NewBasicPointCloud(pc.Size())
+		err = pointcloud.ApplyOffset(pc, pif.Pose(), pcInWorld)
+		if err != nil {
+			return nil, err
+		}
+
+		pcsInWorld = append(pcsInWorld, pcInWorld)
+	}
+
+	big := pointcloud.NewBasicPointCloud(totalSize)
+	for _, pcInWorld := range pcsInWorld {
+		err := pointcloud.ApplyOffset(pcInWorld, nil, big)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return big, nil
 }

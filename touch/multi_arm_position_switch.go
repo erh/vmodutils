@@ -2,8 +2,10 @@ package touch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"go.viam.com/rdk/components/arm"
 	toggleswitch "go.viam.com/rdk/components/switch"
@@ -120,9 +122,12 @@ type MultiArmPositionSwitch struct {
 	visionServices []vision.Service
 	fsSvc          framesystem.Service
 
-	// mu protects access to 'position'
+	// 'mu' protects access to 'position'
 	mu       sync.Mutex
 	position uint32
+
+	// 'executing' ensures only one goToPosition call is active at a time
+	executing atomic.Bool
 }
 
 func (maps *MultiArmPositionSwitch) Name() resource.Name {
@@ -164,6 +169,11 @@ func (maps *MultiArmPositionSwitch) GetNumberOfPositions(ctx context.Context, ex
 }
 
 func (maps *MultiArmPositionSwitch) goToPosition(ctx context.Context, joints []float64) error {
+	if !maps.executing.CompareAndSwap(false, true) {
+		return errors.New("switch is currently executing")
+	}
+	defer maps.executing.Store(false)
+
 	if maps.motion != nil {
 		return goToPositionUsingJointToJointMotion(ctx, joints, maps.arm.Name().Name, maps.motion, maps.visionServices, maps.cfg.Extra, maps.logger)
 	}

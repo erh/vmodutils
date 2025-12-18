@@ -42,7 +42,15 @@
 }
 ```
 
-
+## multi arm position switch
+```
+{
+    "arm" : "<name of arm>", // required
+    "motion" : "<name of motion service>", // optional - if set uses joint to joint motion via motion.Move, if not uses arm.MoveToJointPositions
+    "joints" : [[0, 0, 0, 0, 0, 0], ...], // list of arm joint positions
+    "extra" : "<options>" // options passed as 'extra' to motion.Move or arm.MoveToJointPositions
+}
+```
 
 ## pc multiple arm poses
 ```

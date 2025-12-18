@@ -58,6 +58,12 @@
         "markdown_link": "README.md#pc-look-at-crop-camera",
         "short_description": "looks at the center of a point cloud and gets just that"
 
+    },
+    {
+        "api": "rdk:component:switch",
+        "model": "erh:vmodutils:multi-arm-position-switch",
+        "markdown_link": "README.md#multi-arm-position-switch",
+        "short_description": "allows configuring a list of arm positions and going to a position by index in the list"
     }
   ],
   "applications": null,

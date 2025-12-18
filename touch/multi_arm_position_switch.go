@@ -27,11 +27,11 @@ func init() {
 }
 
 type MultiArmPositionSwitchConfig struct {
-	Arm            string                 `json:"arm,omitempty"`
-	JointsList     [][]float64            `json:"joints_list,omitempty"`
-	Motion         string                 `json:"motion,omitempty"`
-	VisionServices []string               `json:"vision_services,omitempty"`
-	Extra          map[string]interface{} `json:"extra,omitempty"`
+	Arm            string         `json:"arm,omitempty"`
+	JointsList     [][]float64    `json:"joints_list,omitempty"`
+	Motion         string         `json:"motion,omitempty"`
+	VisionServices []string       `json:"vision_services,omitempty"`
+	Extra          map[string]any `json:"extra,omitempty"`
 }
 
 func (c *MultiArmPositionSwitchConfig) Validate(path string) ([]string, []string, error) {

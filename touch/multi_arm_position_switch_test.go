@@ -93,6 +93,7 @@ func TestMultiArmPositionSwitchSetPosition(t *testing.T) {
 	const path = "components.0"
 	ctx := context.Background()
 	logger := logging.NewTestLogger(t)
+
 	t.Run("SetPosition uses motion.Move and vision services when motion service is configured", func(t *testing.T) {
 		fakeArm := inject.NewArm("arm")
 		fakeArmMoveToJointPositionsCallCount := 0

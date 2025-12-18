@@ -313,10 +313,10 @@ func goToPositionUsingJointToJointMotion(
 	goalFrameSystemInputs[armName] = joints
 	if extra == nil {
 		extra = make(map[string]any)
-	} else if extra["goal_state"] != nil {
-		return fmt.Errorf("cannot provide 'goal_state' in 'extra' when using joint to joint motion")
+	} else if extra[extraParamsKeyGoalState] != nil {
+		return fmt.Errorf("cannot provide '%s' in 'extra' when using joint to joint motion", extraParamsKeyGoalState)
 	}
-	extra["goal_state"] = serialize(goalFrameSystemInputs)
+	extra[extraParamsKeyGoalState] = serialize(goalFrameSystemInputs)
 
 	// Call Motion.Move
 	_, err = motionSvc.Move(ctx, motion.MoveReq{

@@ -15,6 +15,8 @@ import (
 	"github.com/erh/vmodutils"
 )
 
+const extraParamsKeyGoalState = "goal_state"
+
 var MultiArmPositionSwitchModel = vmodutils.NamespaceFamily.WithModel("multi-arm-position-switch")
 
 func init() {
@@ -49,7 +51,11 @@ func (c *MultiArmPositionSwitchConfig) Validate(path string) ([]string, []string
 		}
 	}
 
-    deps = append(deps, c.VisionServices...)
+	deps = append(deps, c.VisionServices...)
+
+	if c.Extra != nil && c.Extra[extraParamsKeyGoalState] != nil {
+		return nil, nil, ErrCannotSpecifyGoalStateInExtra
+	}
 
 	return deps, nil, nil
 }

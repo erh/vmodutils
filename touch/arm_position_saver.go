@@ -56,8 +56,10 @@ func (c *ArmPositionSaverConfig) Validate(path string) ([]string, []string, erro
 		}
 	}
 
-	if len(c.VisionServices) > 0 {
-		deps = append(deps, c.VisionServices...)
+	deps = append(deps, c.VisionServices...)
+
+	if c.Extra != nil && c.Extra[extraParamsKeyGoalState] != nil {
+		return nil, nil, ErrCannotSpecifyGoalStateInExtra
 	}
 
 	return deps, nil, nil

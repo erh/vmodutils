@@ -178,12 +178,13 @@ func PCDetectCrop(
 		boxes = append(boxes, d.BoundingBox())
 	}
 
-	return PCLimitToImageBoxes(pc, boxes, props)
+	return PCLimitToImageBoxes(pc, boxes, nil, props)
 }
 
 func PCLimitToImageBoxes(
 	pc pointcloud.PointCloud,
 	boxes []*image.Rectangle,
+	colorCheck ColorCheck,
 	props camera.Properties) (pointcloud.PointCloud, error) {
 
 	out := pointcloud.NewBasicEmpty()
@@ -201,9 +202,18 @@ func PCLimitToImageBoxes(
 				break
 			}
 		}
-		if inBox {
-			out.Set(p, d)
+		if !inBox {
+			return true
 		}
+
+		if colorCheck != nil {
+			good, err := colorCheck(d.Color())
+			if err != nil || !good {
+				return true
+			}
+		}
+
+		out.Set(p, d)
 
 		return true
 	})

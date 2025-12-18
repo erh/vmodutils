@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"image/color"
 	"math"
 	"sync"
 	"time"
@@ -192,12 +193,12 @@ func (cc *lookAtCamera) doNextPointCloud(ctx context.Context, extra map[string]i
 			return nil, err
 		}
 
-		box, err := getBoundingBoxBasedOnCenterHSV(img)
+		box, colorChecker, err := getBoundingBoxBasedOnCenterHSV(img)
 		if err != nil {
 			return nil, err
 		}
 
-		pc, err = PCLimitToImageBoxes(pc, []*image.Rectangle{box}, cc.srcProperties)
+		pc, err = PCLimitToImageBoxes(pc, []*image.Rectangle{box}, colorChecker, cc.srcProperties)
 		if err != nil {
 			return nil, err
 		}
@@ -341,7 +342,9 @@ func minEstimateDisance(a, b pointcloud.PointCloud) float64 {
 	return math.Sqrt(dx*dx + dy*dy + dz*dz)
 }
 
-func getBoundingBoxBasedOnCenterHSV(img image.Image) (*image.Rectangle, error) {
+type ColorCheck func(c color.Color) (bool, error)
+
+func getBoundingBoxBasedOnCenterHSV(img image.Image) (*image.Rectangle, ColorCheck, error) {
 	bounds := img.Bounds()
 
 	centerX := bounds.Min.X + bounds.Dx()/2
@@ -349,7 +352,7 @@ func getBoundingBoxBasedOnCenterHSV(img image.Image) (*image.Rectangle, error) {
 
 	cc, ok := colorful.MakeColor(img.At(centerX, centerY))
 	if !ok {
-		return nil, fmt.Errorf("bad color %v", img.At(centerX, centerY))
+		return nil, nil, fmt.Errorf("bad color %v", img.At(centerX, centerY))
 	}
 
 	good, _, _ := cc.Hsv()
@@ -366,7 +369,15 @@ func getBoundingBoxBasedOnCenterHSV(img image.Image) (*image.Rectangle, error) {
 	type point struct{ x, y int }
 	queue := []point{{centerX, centerY}}
 
-	hueImg := image.NewRGBA(bounds) // TODO : remove
+	colorChecker := func(c color.Color) (bool, error) {
+		cc, ok := colorful.MakeColor(c)
+		if !ok {
+			return false, fmt.Errorf("bad color %v", c)
+		}
+		h, _, _ := cc.Hsv()
+		bucket := math.Floor(h / 100)
+		return bucket == good, nil
+	}
 
 	for len(queue) > 0 { // BFS from center
 		p := queue[0]
@@ -384,14 +395,11 @@ func getBoundingBoxBasedOnCenterHSV(img image.Image) (*image.Rectangle, error) {
 		}
 		visited[vy][vx] = true
 
-		// Hue bucket check
-		cc, ok := colorful.MakeColor(img.At(p.x, p.y))
-		if !ok {
-			return nil, fmt.Errorf("bad color %v", img.At(p.x, p.y))
+		good, err := colorChecker(img.At(p.x, p.y))
+		if err != nil {
+			return nil, nil, err
 		}
-		h, _, _ := cc.Hsv()
-		bucket := math.Floor(h / 100)
-		if bucket != good {
+		if !good {
 			continue
 		}
 
@@ -400,8 +408,6 @@ func getBoundingBoxBasedOnCenterHSV(img image.Image) (*image.Rectangle, error) {
 		goodRectange.Max.X = max(goodRectange.Max.X, p.x)
 		goodRectange.Max.Y = max(goodRectange.Max.Y, p.y)
 
-		hueImg.Set(p.x, p.y, colorful.Hsv(bucket*100, 1, 1))
-
 		// Add neighbors
 		queue = append(queue, point{p.x - 1, p.y})
 		queue = append(queue, point{p.x + 1, p.y})
@@ -409,10 +415,5 @@ func getBoundingBoxBasedOnCenterHSV(img image.Image) (*image.Rectangle, error) {
 		queue = append(queue, point{p.x, p.y + 1})
 	}
 
-	err := rimage.SaveImage(hueImg, "temp.png")
-	if err != nil {
-		return nil, err
-	}
-
-	return &goodRectange, nil
+	return &goodRectange, colorChecker, nil
 }

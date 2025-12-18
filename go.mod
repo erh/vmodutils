@@ -5,9 +5,9 @@ go 1.25.1
 require (
 	github.com/golang/geo v0.0.0-20230421003525-6adc56603217
 	github.com/lucasb-eyer/go-colorful v1.2.0
-	go.viam.com/rdk v0.104.1-0.20251204185916-f3d00c98ca9a
+	go.viam.com/rdk v0.105.0
 	go.viam.com/test v1.2.4
-	go.viam.com/utils v0.3.5
+	go.viam.com/utils v0.4.0
 	neilpa.me/go-stl v0.5.0
 )
 
@@ -226,8 +226,8 @@ require (
 	google.golang.org/genproto v0.0.0-20240903143218-8af14fe29dc1 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250825161204-c5933d9347a5 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250825161204-c5933d9347a5 // indirect
-	google.golang.org/grpc v1.75.0 // indirect
-	google.golang.org/protobuf v1.36.8 // indirect
+	google.golang.org/grpc v1.75.1 // indirect
+	google.golang.org/protobuf v1.36.10 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/src-d/go-billy.v4 v4.3.2 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect

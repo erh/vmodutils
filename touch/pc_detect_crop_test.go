@@ -17,7 +17,7 @@ func TestPCDetectCrop1(t *testing.T) {
 
 	out, err := PCDetectCrop(in, []objectdetection.Detection{
 		objectdetection.NewDetectionWithoutImgBounds(image.Rect(525, 200, 699, 421), .8, "glass"),
-	}, rsProperties)
+	}, RealSenseProperties)
 
 	test.That(t, err, test.ShouldBeNil)
 

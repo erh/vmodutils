@@ -18,14 +18,14 @@ func TestSanding2(t *testing.T) {
 	imgIn, err := rimage.ReadImageFromFile("data/sanding2.jpg")
 	test.That(t, err, test.ShouldBeNil)
 
-	box, err := getBoundingBoxBasedOnCenterHSV(imgIn)
+	box, _, err := getBoundingBoxBasedOnCenterHSV(imgIn)
 	test.That(t, err, test.ShouldBeNil)
 	logger.Infof("box: %v", box)
 
 	in, err := pointcloud.NewFromFile("data/sanding2.pcd", "")
 	test.That(t, err, test.ShouldBeNil)
 
-	look, err := PCLimitToImageBoxes(in, []*image.Rectangle{box}, rsProperties)
+	look, err := PCLimitToImageBoxes(in, []*image.Rectangle{box}, nil, RealSenseProperties)
 	test.That(t, err, test.ShouldBeNil)
 
 	logger.Infof("size: %d", look.Size())

@@ -38,7 +38,13 @@
     "motion" : "<name of motion service>", // optional - if used uses post not joines
     "joints" : [ ], // set automatically
     "point" : < ... >,
-    "orientation" : < ... >
+    "orientation" : < ... >,
+
+    // optional - if set, the Geometry objects in the vision services' GetObjectPointClouds results
+    // are added to the world state passed to the motion service
+    "vision_services": ["<name of vision service>"],
+
+    "extra" : "<options>" // options passed as 'extra' to motion.Move or arm.MoveToJointPositions
 }
 ```
 
@@ -48,6 +54,11 @@
     "arm" : "<name of arm>", // required
     "motion" : "<name of motion service>", // optional - if set uses joint to joint motion via motion.Move, if not uses arm.MoveToJointPositions
     "joints" : [[0, 0, 0, 0, 0, 0], ...], // list of arm joint positions
+
+    // optional - if set, the Geometry objects in the vision services' GetObjectPointClouds results
+    // are added to the world state passed to the motion service
+    "vision_services": ["<name of vision service>"],
+
     "extra" : "<options>" // options passed as 'extra' to motion.Move or arm.MoveToJointPositions
 }
 ```

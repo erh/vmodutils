@@ -138,7 +138,7 @@ func (maps *MultiArmPositionSwitch) GetNumberOfPositions(ctx context.Context, ex
 
 func (maps *MultiArmPositionSwitch) goToPosition(ctx context.Context, joints []float64) error {
 	if maps.motion != nil {
-		return goToPositionUsingJointToJointMotion(ctx, joints, maps.arm.Name().Name, maps.motion, maps.visionServices, maps.logger)
+		return goToPositionUsingJointToJointMotion(ctx, joints, maps.arm.Name().Name, maps.motion, maps.visionServices, maps.cfg.Extra, maps.logger)
 	}
-	return goToPositionUsingMoveToJointPositions(ctx, joints, maps.arm, maps.logger)
+	return goToPositionUsingMoveToJointPositions(ctx, joints, maps.arm, maps.cfg.Extra, maps.logger)
 }

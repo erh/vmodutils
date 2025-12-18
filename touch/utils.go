@@ -291,7 +291,15 @@ func buildWorldStateWithObstacles(ctx context.Context, visionSvcs []vision.Servi
 	return referenceframe.NewWorldState(obstacles, []*referenceframe.LinkInFrame{} /* no additional transforms */)
 }
 
-func goToPositionUsingJointToJointMotion(ctx context.Context, joints []float64, armName string, motionSvc motion.Service, visionSvcs []vision.Service, logger logging.Logger) error {
+func goToPositionUsingJointToJointMotion(
+	ctx context.Context,
+	joints []float64,
+	armName string,
+	motionSvc motion.Service,
+	visionSvcs []vision.Service,
+	extra map[string]any,
+	logger logging.Logger,
+) error {
 	logger.Debugf("going to position using joint to joint motion")
 
 	// Add obstacles to the world state from the configured vision services
@@ -303,7 +311,10 @@ func goToPositionUsingJointToJointMotion(ctx context.Context, joints []float64, 
 	// Express the goal state in joint positions
 	goalFrameSystemInputs := make(referenceframe.FrameSystemInputs)
 	goalFrameSystemInputs[armName] = joints
-	extra := map[string]any{"goal_state": serialize(goalFrameSystemInputs)}
+	if extra["goal_state"] != nil {
+		return fmt.Errorf("cannot provide 'goal_state' in 'extra' when using joint to joint motion")
+	}
+	extra["goal_state"] = serialize(goalFrameSystemInputs)
 
 	// Call Motion.Move
 	_, err = motionSvc.Move(ctx, motion.MoveReq{
@@ -314,12 +325,28 @@ func goToPositionUsingJointToJointMotion(ctx context.Context, joints []float64, 
 	return err
 }
 
-func goToPositionUsingMoveToJointPositions(ctx context.Context, joints []float64, arm arm.Arm, logger logging.Logger) error {
+func goToPositionUsingMoveToJointPositions(
+	ctx context.Context,
+	joints []float64,
+	arm arm.Arm,
+	extra map[string]any,
+	logger logging.Logger,
+) error {
 	logger.Debugf("going to position using MoveToJointPositions")
-	return arm.MoveToJointPositions(ctx, joints, nil)
+	return arm.MoveToJointPositions(ctx, joints, extra)
 }
 
-func goToPositionUsingCartesianMotion(ctx context.Context, point r3.Vector, orientation spatialmath.OrientationVectorDegrees, motionSvc motion.Service, visionSvcs []vision.Service, fsSvc framesystem.Service, armName string, extra map[string]any, logger logging.Logger) error {
+func goToPositionUsingCartesianMotion(
+	ctx context.Context,
+	point r3.Vector,
+	orientation spatialmath.OrientationVectorDegrees,
+	motionSvc motion.Service,
+	visionSvcs []vision.Service,
+	fsSvc framesystem.Service,
+	armName string,
+	extra map[string]any,
+	logger logging.Logger,
+) error {
 	logger.Debugf("going to position using cartesian motion")
 
 	// Check if we are already close enough

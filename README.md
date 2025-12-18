@@ -37,7 +37,10 @@
     // required
     "arm" : "<name of arm>",
 
-    // optional - if set uses pose not joints
+    // optional
+    // if motion and joints are set, uses joint to joint motion via motion.Move
+    // if motion and pose are set, uses cartesian motion via motion.Move
+    // if motion is not set and joints are set, uses arm.MoveToJointPositions
     "motion" : "<name of motion service>",
 
     // can be set automatically via SetPosition command

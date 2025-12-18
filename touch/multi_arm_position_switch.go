@@ -119,7 +119,7 @@ func (maps *MultiArmPositionSwitch) DoCommand(ctx context.Context, cmd map[strin
 
 func (maps *MultiArmPositionSwitch) SetPosition(ctx context.Context, position uint32, extra map[string]interface{}) error {
 	if position > uint32(len(maps.cfg.JointsList))-1 {
-		return fmt.Errorf("requested position %d is out of range", position)
+		return fmt.Errorf("requested position %d is highest position %d", position, len(maps.cfg.JointsList)-1)
 	}
 	return maps.goToPosition(ctx, maps.cfg.JointsList[position])
 }

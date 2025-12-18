@@ -137,7 +137,6 @@ func (maps *MultiArmPositionSwitch) GetNumberOfPositions(ctx context.Context, ex
 	for i := 0; i < len(maps.cfg.JointsList); i++ {
 		positionStrs = append(positionStrs, fmt.Sprintf("go to %d", i))
 	}
-	maps.logger.Infof("positionStrs: %v", positionStrs)
 	return uint32(len(maps.cfg.JointsList)), positionStrs, nil
 }
 

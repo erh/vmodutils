@@ -1,9 +1,10 @@
 package main
 
 import (
+	"go.viam.com/rdk/components/button"
 	"go.viam.com/rdk/components/camera"
 	"go.viam.com/rdk/components/gripper"
-	"go.viam.com/rdk/components/switch"
+	toggleswitch "go.viam.com/rdk/components/switch"
 	"go.viam.com/rdk/module"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/services/vision"
@@ -22,6 +23,8 @@ func main() {
 		resource.APIModel{gripper.API, touch.ObstacleOpenBoxModel},
 		resource.APIModel{vision.API, touch.ClusterModel},
 		resource.APIModel{camera.API, touch.LookAtCameraModel},
+		resource.APIModel{button.API, touch.MultipleArmPosesButtonModel},
+		resource.APIModel{camera.API, touch.MultipleArmPosesButtonCameraModel},
 	)
 
 }

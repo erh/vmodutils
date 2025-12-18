@@ -2,6 +2,7 @@ package touch
 
 import (
 	"context"
+	"fmt"
 	"image"
 	"image/color"
 	"math"
@@ -9,10 +10,15 @@ import (
 
 	"github.com/golang/geo/r3"
 
+	"go.viam.com/rdk/components/arm"
 	"go.viam.com/rdk/components/camera"
 	toggleswitch "go.viam.com/rdk/components/switch"
+	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/pointcloud"
+	"go.viam.com/rdk/referenceframe"
 	"go.viam.com/rdk/robot/framesystem"
+	"go.viam.com/rdk/services/motion"
+	"go.viam.com/rdk/services/vision"
 	"go.viam.com/rdk/spatialmath"
 )
 
@@ -266,4 +272,108 @@ func GetMergedPointCloud(ctx context.Context, positions []toggleswitch.Switch, s
 	}
 
 	return big, nil
+}
+
+func buildWorldStateWithObstacles(ctx context.Context, visionSvcs []vision.Service) (*referenceframe.WorldState, error) {
+	var obstacles []*referenceframe.GeometriesInFrame
+	for _, v := range visionSvcs {
+		vizs, err := v.GetObjectPointClouds(ctx, "", nil)
+		if err != nil {
+			return nil, fmt.Errorf("error while calling GetObjectPointClouds on vision service %s, %w", v.Name(), err)
+		}
+		for _, viz := range vizs {
+			if viz.Geometry != nil {
+				gif := referenceframe.NewGeometriesInFrame(referenceframe.World, []spatialmath.Geometry{viz.Geometry})
+				obstacles = append(obstacles, gif)
+			}
+		}
+	}
+	return referenceframe.NewWorldState(obstacles, []*referenceframe.LinkInFrame{} /* no additional transforms */)
+}
+
+func goToPositionUsingJointToJointMotion(ctx context.Context, joints []float64, armName string, motionSvc motion.Service, visionSvcs []vision.Service, logger logging.Logger) error {
+	logger.Debugf("going to position using joint to joint motion")
+
+	// Add obstacles to the world state from the configured vision services
+	worldState, err := buildWorldStateWithObstacles(ctx, visionSvcs)
+	if err != nil {
+		return err
+	}
+
+	// Express the goal state in joint positions
+	goalFrameSystemInputs := make(referenceframe.FrameSystemInputs)
+	goalFrameSystemInputs[armName] = joints
+	extra := map[string]any{"goal_state": serialize(goalFrameSystemInputs)}
+
+	// Call Motion.Move
+	_, err = motionSvc.Move(ctx, motion.MoveReq{
+		ComponentName: armName,
+		WorldState:    worldState,
+		Extra:         extra,
+	})
+	return err
+}
+
+func goToPositionUsingMoveToJointPositions(ctx context.Context, joints []float64, arm arm.Arm, logger logging.Logger) error {
+	logger.Debugf("going to position using MoveToJointPositions")
+	return arm.MoveToJointPositions(ctx, joints, nil)
+}
+
+func goToPositionUsingCartesianMotion(ctx context.Context, point r3.Vector, orientation spatialmath.OrientationVectorDegrees, motionSvc motion.Service, visionSvcs []vision.Service, fsSvc framesystem.Service, armName string, extra map[string]any, logger logging.Logger) error {
+	logger.Debugf("going to position using cartesian motion")
+
+	// Check if we are already close enough
+	current, err := fsSvc.GetPose(ctx, armName, "world", nil, nil)
+	if err != nil {
+		return err
+	}
+
+	linearDelta := current.Pose().Point().Distance(point)
+	orientationDelta := spatialmath.QuatToR3AA(spatialmath.OrientationBetween(current.Pose().Orientation(), &orientation).Quaternion()).Norm2()
+
+	logger.Debugf("goToSavePosition linearDelta: %v orientationDelta: %v", linearDelta, orientationDelta)
+	if linearDelta < .1 && orientationDelta < .01 {
+		logger.Debugf("close enough, not moving - linearDelta: %v orientationDelta: %v", linearDelta, orientationDelta)
+		return nil
+	}
+
+	// Add obstacles to the world state from the configured vision services
+	worldState, err := buildWorldStateWithObstacles(ctx, visionSvcs)
+	if err != nil {
+		return err
+	}
+
+	// Express the goal state in cartesian pose
+	pif := referenceframe.NewPoseInFrame(
+		"world",
+		spatialmath.NewPose(point, &orientation),
+	)
+
+	// Call Motion.Move
+	done, err := motionSvc.Move(
+		ctx,
+		motion.MoveReq{
+			ComponentName: armName,
+			Destination:   pif,
+			WorldState:    worldState,
+			Extra:         extra,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	if !done {
+		return fmt.Errorf("move didn't finish")
+	}
+	return nil
+}
+
+func serialize(inputs referenceframe.FrameSystemInputs) map[string]any {
+	m := map[string]interface{}{}
+	confMap := map[string]interface{}{}
+	for fName, input := range inputs {
+		confMap[fName] = input
+	}
+	m["configuration"] = confMap
+	return m
 }

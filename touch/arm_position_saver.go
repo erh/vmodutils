@@ -10,7 +10,6 @@ import (
 	"go.viam.com/rdk/components/arm"
 	toggleswitch "go.viam.com/rdk/components/switch"
 	"go.viam.com/rdk/logging"
-	"go.viam.com/rdk/referenceframe"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/robot/framesystem"
 	"go.viam.com/rdk/services/motion"
@@ -191,110 +190,18 @@ func (aps *ArmPositionSaver) saveCurrentPosition(ctx context.Context) error {
 	return vmodutils.UpdateComponentCloudAttributesFromModuleEnv(ctx, aps.name, newConfig, aps.logger)
 }
 
-func (aps *ArmPositionSaver) buildWorldStateWithObstacles(ctx context.Context) (*referenceframe.WorldState, error) {
-
-	var obstacles []*referenceframe.GeometriesInFrame
-	for _, v := range aps.visionServices {
-		vizs, err := v.GetObjectPointClouds(ctx, "", nil)
-		if err != nil {
-			return nil, fmt.Errorf("error while calling GetObjectPointClouds on vision service %s, %w", v.Name(), err)
-		}
-		for _, viz := range vizs {
-			if viz.Geometry != nil {
-				gif := referenceframe.NewGeometriesInFrame(referenceframe.World, []spatialmath.Geometry{viz.Geometry})
-				obstacles = append(obstacles, gif)
-			}
-		}
-	}
-	return referenceframe.NewWorldState(obstacles, []*referenceframe.LinkInFrame{} /* no additional transforms */)
-}
-
 func (aps *ArmPositionSaver) goToSavePosition(ctx context.Context) error {
 	if len(aps.cfg.Joints) > 0 {
 		if aps.motion != nil {
-			aps.logger.Debugf("using joint to joint motion")
-			// Add obstacles to the world state from the configured vision services
-			worldState, err := aps.buildWorldStateWithObstacles(ctx)
-			if err != nil {
-				return err
-			}
-
-			// Express the goal state in joint positions
-			goalFrameSystemInputs := make(referenceframe.FrameSystemInputs)
-			goalFrameSystemInputs[aps.arm.Name().Name] = aps.cfg.Joints
-			extra := map[string]any{"goal_state": serialize(goalFrameSystemInputs)}
-
-			// Call Motion.Move
-			_, err = aps.motion.Move(ctx, motion.MoveReq{
-				ComponentName: aps.cfg.Arm,
-				WorldState:    worldState,
-				Extra:         extra,
-			})
-			return err
+			goToPositionUsingJointToJointMotion(ctx, aps.cfg.Joints, aps.arm.Name().Name, aps.motion, aps.visionServices, aps.logger)
 		} else {
-			aps.logger.Debugf("using MoveToJointPositions")
-			return aps.arm.MoveToJointPositions(ctx, aps.cfg.Joints, aps.cfg.Extra)
+			return goToPositionUsingMoveToJointPositions(ctx, aps.cfg.Joints, aps.arm, aps.logger)
 		}
 	}
 
 	if aps.motion != nil {
-		aps.logger.Debugf("using cartesian motion")
-
-		// Check if we are already close enough
-		current, err := aps.fsSvc.GetPose(ctx, aps.cfg.Arm, "world", nil, nil)
-		if err != nil {
-			return err
-		}
-
-		linearDelta := current.Pose().Point().Distance(aps.cfg.Point)
-		orientationDelta := spatialmath.QuatToR3AA(spatialmath.OrientationBetween(current.Pose().Orientation(), &aps.cfg.Orientation).Quaternion()).Norm2()
-
-		aps.logger.Debugf("goToSavePosition linearDelta: %v orientationDelta: %v", linearDelta, orientationDelta)
-		if linearDelta < .1 && orientationDelta < .01 {
-			aps.logger.Debugf("close enough, not moving - linearDelta: %v orientationDelta: %v", linearDelta, orientationDelta)
-			return nil
-		}
-
-		// Add obstacles to the world state from the configured vision services
-		worldState, err := aps.buildWorldStateWithObstacles(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Express the goal state in cartesian pose
-		pif := referenceframe.NewPoseInFrame(
-			"world",
-			spatialmath.NewPose(aps.cfg.Point, &aps.cfg.Orientation),
-		)
-
-		// Call Motion.Move
-		done, err := aps.motion.Move(
-			ctx,
-			motion.MoveReq{
-				ComponentName: aps.cfg.Arm,
-				Destination:   pif,
-				WorldState:    worldState,
-				Extra:         aps.cfg.Extra,
-			},
-		)
-		if err != nil {
-			return err
-		}
-		if !done {
-			return fmt.Errorf("move didn't finish")
-		}
-		return nil
+		return goToPositionUsingCartesianMotion(ctx, aps.cfg.Point, aps.cfg.Orientation, aps.motion, aps.visionServices, aps.fsSvc, aps.arm.Name().Name, nil, aps.logger)
 	}
 
 	return fmt.Errorf("need to configure where to go")
-}
-
-func serialize(inputs referenceframe.FrameSystemInputs) map[string]any {
-	m := map[string]interface{}{}
-	confMap := map[string]interface{}{}
-	for fName, input := range inputs {
-		confMap[fName] = input
-	}
-	m["configuration"] = confMap
-	return m
 }

@@ -38,7 +38,7 @@ type MultiArmPositionSwitchConfig struct {
 
 func (c *MultiArmPositionSwitchConfig) Validate(path string) ([]string, []string, error) {
 	if c.Arm == "" {
-		return nil, nil, fmt.Errorf("no arm specificed")
+		return nil, nil, resource.NewConfigValidationFieldRequiredError(path, "arm")
 	}
 
 	deps := []string{c.Arm}

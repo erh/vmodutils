@@ -138,18 +138,23 @@ func (maps *MultiArmPositionSwitch) DoCommand(ctx context.Context, cmd map[strin
 	return nil, resource.ErrDoUnimplemented
 }
 
+func (maps *MultiArmPositionSwitch) updatePosition(position uint32) {
+	maps.mu.Lock()
+	defer maps.mu.Unlock()
+	maps.position = position
+}
+
 func (maps *MultiArmPositionSwitch) SetPosition(ctx context.Context, position uint32, extra map[string]interface{}) error {
 	if position > uint32(len(maps.cfg.JointsList))-1 {
 		return fmt.Errorf("requested position %d is greater than highest possible position %d", position, len(maps.cfg.JointsList)-1)
 	}
+
+	maps.updatePosition(position)
+
 	err := maps.goToPosition(ctx, maps.cfg.JointsList[position])
 	if err != nil {
 		return err
 	}
-
-	maps.mu.Lock()
-	defer maps.mu.Unlock()
-	maps.position = position
 
 	return nil
 }

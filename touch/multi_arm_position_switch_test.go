@@ -2,6 +2,7 @@ package touch
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	toggleswitch "go.viam.com/rdk/components/switch"
@@ -16,6 +17,8 @@ import (
 
 	"github.com/erh/vmodutils"
 )
+
+var dummyErr = errors.New("dummy")
 
 func TestMultiArmPositionSwitchValidate(t *testing.T) {
 	const path = "components.0"
@@ -99,12 +102,6 @@ func TestMultiArmPositionSwitchSetPositionAndGetPosition(t *testing.T) {
 		fakeArmMoveToJointPositionsCallCount := 0
 		fakeArm.MoveToJointPositionsFunc = func(ctx context.Context, joints []float64, extra map[string]any) error {
 			fakeArmMoveToJointPositionsCallCount++
-
-			if fakeArmMoveToJointPositionsCallCount == 1 {
-				test.That(t, joints, test.ShouldResemble, []float64{0.0, 0.0, 0.0})
-			} else if fakeArmMoveToJointPositionsCallCount == 2 {
-				test.That(t, joints, test.ShouldResemble, []float64{1.0, 1.0, 1.0})
-			}
 			return nil
 		}
 
@@ -184,6 +181,21 @@ func TestMultiArmPositionSwitchSetPositionAndGetPosition(t *testing.T) {
 		position, err = s.GetPosition(ctx, nil)
 		test.That(t, err, test.ShouldBeNil)
 		test.That(t, position, test.ShouldEqual, 1)
+
+		// Now make SetPosition fail and confirm GetPosition still shows the attempt to set a different position
+		fakeMotion.MoveFunc = func(ctx context.Context, req motion.MoveReq) (bool, error) {
+			fakeMotionMoveCallCount++
+			return false, dummyErr
+		}
+		err = s.SetPosition(ctx, 0, nil)
+		test.That(t, err, test.ShouldBeError, dummyErr)
+		test.That(t, fakeArmMoveToJointPositionsCallCount, test.ShouldEqual, 0)
+		test.That(t, fakeMotionMoveCallCount, test.ShouldEqual, 3)
+		test.That(t, fakeVision1GetObjectPointCloudsCallCount, test.ShouldEqual, 3)
+		test.That(t, fakeVision2GetObjectPointCloudsCallCount, test.ShouldEqual, 3)
+		position, err = s.GetPosition(ctx, nil)
+		test.That(t, err, test.ShouldBeNil)
+		test.That(t, position, test.ShouldEqual, 0)
 	})
 
 	t.Run("SetPosition uses only arm.MoveToJointPositions when motion service is not configured", func(t *testing.T) {
@@ -244,5 +256,17 @@ func TestMultiArmPositionSwitchSetPositionAndGetPosition(t *testing.T) {
 		position, err = s.GetPosition(ctx, nil)
 		test.That(t, err, test.ShouldBeNil)
 		test.That(t, position, test.ShouldEqual, 1)
+
+		// Now make SetPosition fail and confirm GetPosition still shows the attempt to set a different position
+		fakeArm.MoveToJointPositionsFunc = func(ctx context.Context, joints []float64, extra map[string]any) error {
+			fakeArmMoveToJointPositionsCallCount++
+			return dummyErr
+		}
+		err = s.SetPosition(ctx, 0, nil)
+		test.That(t, err, test.ShouldBeError, dummyErr)
+		test.That(t, fakeArmMoveToJointPositionsCallCount, test.ShouldEqual, 3)
+		position, err = s.GetPosition(ctx, nil)
+		test.That(t, err, test.ShouldBeNil)
+		test.That(t, position, test.ShouldEqual, 0)
 	})
 }

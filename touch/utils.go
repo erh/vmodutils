@@ -374,7 +374,7 @@ func goToPositionUsingCartesianMotion(
 
 	// Express the goal state in cartesian pose
 	pif := referenceframe.NewPoseInFrame(
-		"world",
+		referenceframe.World,
 		spatialmath.NewPose(point, &orientation),
 	)
 

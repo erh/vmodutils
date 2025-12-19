@@ -149,8 +149,6 @@ func (maps *MultiArmPositionSwitch) SetPosition(ctx context.Context, position ui
 		return fmt.Errorf("requested position %d is greater than highest possible position %d", position, len(maps.cfg.JointsList)-1)
 	}
 
-	maps.updatePosition(position)
-
 	err := maps.goToPosition(ctx, maps.cfg.JointsList[position])
 	if err != nil {
 		return err
@@ -178,6 +176,8 @@ func (maps *MultiArmPositionSwitch) goToPosition(ctx context.Context, joints []f
 		return errors.New("switch is currently executing")
 	}
 	defer maps.executing.Store(false)
+
+	maps.updatePosition(position)
 
 	if maps.motion != nil {
 		return goToPositionUsingJointToJointMotion(ctx, joints, maps.arm.Name().Name, maps.motion, maps.visionServices, maps.cfg.Extra, maps.logger)

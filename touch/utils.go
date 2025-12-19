@@ -352,7 +352,7 @@ func goToPositionUsingCartesianMotion(
 	logger.Debugf("going to position using cartesian motion")
 
 	// Check if we are already close enough
-	current, err := fsSvc.GetPose(ctx, armName, "world", nil, nil)
+	current, err := fsSvc.GetPose(ctx, armName, referenceframe.World, nil, nil)
 	if err != nil {
 		return err
 	}

@@ -274,7 +274,6 @@ func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswi
 	return big, nil
 }
 
-
 func buildWorldStateWithObstacles(ctx context.Context, visionSvcs []vision.Service) (*referenceframe.WorldState, error) {
 	var obstacles []*referenceframe.GeometriesInFrame
 	for _, v := range visionSvcs {
@@ -406,6 +405,7 @@ func serialize(inputs referenceframe.FrameSystemInputs) map[string]any {
 	}
 	m["configuration"] = confMap
 	return m
+}
 
 func GetMergedPointCloudFromMultiPositionSwitch(ctx context.Context, s toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service) (pointcloud.PointCloud, error) {
 	pcsInWorld := []pointcloud.PointCloud{}

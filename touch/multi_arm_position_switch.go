@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"go.viam.com/rdk/components/arm"
 	toggleswitch "go.viam.com/rdk/components/switch"
@@ -14,8 +15,10 @@ import (
 	"go.viam.com/rdk/robot/framesystem"
 	"go.viam.com/rdk/services/motion"
 	"go.viam.com/rdk/services/vision"
+	"go.viam.com/utils/trace"
 
 	"github.com/erh/vmodutils"
+	"github.com/erh/vmodutils/file_utils"
 )
 
 const extraParamsKeyGoalState = "goal_state"
@@ -32,11 +35,12 @@ func init() {
 }
 
 type MultiArmPositionSwitchConfig struct {
-	Arm            string         `json:"arm,omitempty"`
-	JointsList     [][]float64    `json:"joints_list,omitempty"`
-	Motion         string         `json:"motion,omitempty"`
-	VisionServices []string       `json:"vision_services,omitempty"`
-	Extra          map[string]any `json:"extra,omitempty"`
+	Arm                          string         `json:"arm,omitempty"`
+	JointsList                   [][]float64    `json:"joints_list,omitempty"`
+	Motion                       string         `json:"motion,omitempty"`
+	VisionServices               []string       `json:"vision_services,omitempty"`
+	Extra                        map[string]any `json:"extra,omitempty"`
+	WriteFilesToCaptureDirectory bool           `json:"write_files_to_capture_directory,omitempty"`
 }
 
 func (c *MultiArmPositionSwitchConfig) Validate(path string) ([]string, []string, error) {
@@ -176,6 +180,20 @@ func (maps *MultiArmPositionSwitch) goToPosition(ctx context.Context, position u
 		return errors.New("switch is currently executing")
 	}
 	defer maps.executing.Store(false)
+	if maps.cfg.WriteFilesToCaptureDirectory {
+		traceID := ""
+		if span := trace.FromContext(ctx); span != nil {
+			traceID = span.SpanContext().TraceID().String()
+		}
+		dirPath := file_utils.GetPathInCaptureDir(traceID)
+
+		if traceID == "" {
+			maps.logger.Warnf("no traceID set, writing resource config file for %s without traceID in capture directory", maps.name.Name)
+		}
+
+		fileName := fmt.Sprintf("%s_%s", maps.name.Name, "config.json")
+		file_utils.SaveJsonFile(maps.cfg, dirPath, fileName, time.Now())
+	}
 
 	maps.updatePosition(position)
 

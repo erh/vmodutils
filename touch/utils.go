@@ -539,13 +539,5 @@ func GetMergedPointCloudFromMultiPositionSwitch(ctx context.Context, s toggleswi
 		}
 	}
 
-	if writeFilesToCaptureDirectory {
-		// Save merged pcd
-		dirPath := file_utils.GetPathInCaptureDir(traceID)
-		if err := file_utils.SavePointCloudFile(big, dirPath, "merged.pcd", time.Now()); err != nil {
-			return nil, err
-		}
-	}
-
 	return big, nil
 }

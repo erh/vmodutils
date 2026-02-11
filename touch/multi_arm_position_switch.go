@@ -198,7 +198,7 @@ func (maps *MultiArmPositionSwitch) goToPosition(ctx context.Context, position u
 		}
 
 		// Write the goal joint position
-		goal_filename := fmt.Sprintf("%s_joint_position_%d_goal.json", maps.name.Name, position)
+		goal_filename := fmt.Sprintf("%s_joint_position_goal_%d.json", maps.name.Name, position)
 		if err := file_utils.SaveJsonFile(joints, dirPath, goal_filename, time.Now()); err != nil {
 			return err
 		}
@@ -217,7 +217,7 @@ func (maps *MultiArmPositionSwitch) goToPosition(ctx context.Context, position u
 		if err != nil {
 			return errors.Join(moveErr, err)
 		}
-		actual_position_filename := fmt.Sprintf("%s_joint_position_%d_actual.json", maps.name.Name, position)
+		actual_position_filename := fmt.Sprintf("%s_joint_position_actual_%d.json", maps.name.Name, position)
 		if err := file_utils.SaveJsonFile(curInputs, dirPath, actual_position_filename, time.Now()); err != nil {
 			return errors.Join(moveErr, err)
 		}

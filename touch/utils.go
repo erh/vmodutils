@@ -235,7 +235,7 @@ func GetApproachPoint(p r3.Vector, deltaLinear float64, o *spatialmath.Orientati
 }
 
 func writeFilesForPosition(ctx context.Context, traceID string, pos int, pc pointcloud.PointCloud, pif *referenceframe.PoseInFrame, pcInWorld pointcloud.PointCloud, images []camera.NamedImage, imagesMd resource.ResponseMetadata) error {
-	dirPath := file_utils.GetPathInCaptureDir(traceID)
+	dirPath := file_utils.GetPathInCaptureDir(fmt.Sprintf("tag=%s", traceID))
 
 	// Save pcd from camera in camera frame
 	if err := file_utils.SavePointCloudFile(pc, dirPath, "imaging_camera_frame_"+strconv.Itoa(pos)+".pcd", time.Now()); err != nil {
@@ -330,7 +330,7 @@ func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswi
 
 	if writeFilesToCaptureDirectory {
 		// Save merged pcd
-		dirPath := file_utils.GetPathInCaptureDir(traceID)
+		dirPath := file_utils.GetPathInCaptureDir(fmt.Sprintf("tag=%s", traceID))
 		if err := file_utils.SavePointCloudFile(big, dirPath, "merged.pcd", time.Now()); err != nil {
 			return nil, err
 		}

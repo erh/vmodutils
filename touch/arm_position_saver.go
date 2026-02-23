@@ -195,10 +195,10 @@ func (aps *ArmPositionSaver) saveCurrentPosition(ctx context.Context) error {
 func (aps *ArmPositionSaver) goToSavePosition(ctx context.Context) error {
 	if len(aps.cfg.Joints) > 0 {
 		if aps.motion != nil {
-			goToPositionUsingJointToJointMotion(ctx, aps.cfg.Joints, aps.arm.Name().Name, aps.motion, aps.visionServices, aps.cfg.Extra, aps.logger)
-		} else {
-			return goToPositionUsingMoveToJointPositions(ctx, aps.cfg.Joints, aps.arm, aps.cfg.Extra, aps.logger)
+			return goToPositionUsingJointToJointMotion(ctx, aps.cfg.Joints, aps.arm.Name().Name, aps.motion, aps.visionServices, aps.cfg.Extra, aps.logger)
 		}
+
+		return goToPositionUsingMoveToJointPositions(ctx, aps.cfg.Joints, aps.arm, aps.cfg.Extra, aps.logger)
 	}
 
 	if aps.motion != nil {

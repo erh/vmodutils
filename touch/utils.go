@@ -15,6 +15,7 @@ import (
 	"go.viam.com/rdk/components/camera"
 	toggleswitch "go.viam.com/rdk/components/switch"
 	"go.viam.com/rdk/logging"
+	"go.viam.com/rdk/motionplan"
 	"go.viam.com/rdk/pointcloud"
 	"go.viam.com/rdk/referenceframe"
 	"go.viam.com/rdk/resource"
@@ -363,9 +364,11 @@ func goToPositionUsingJointToJointMotion(
 	motionSvc motion.Service,
 	visionSvcs []vision.Service,
 	extra map[string]any,
+	constraints *motionplan.Constraints,
 	logger logging.Logger,
 ) error {
 	logger.Debugf("going to position using joint to joint motion")
+	logger.Debugf("constraints: %#v", constraints)
 
 	// Add obstacles to the world state from the configured vision services
 	worldState, err := buildWorldStateWithObstacles(ctx, visionSvcs)
@@ -388,6 +391,7 @@ func goToPositionUsingJointToJointMotion(
 		ComponentName: armName,
 		WorldState:    worldState,
 		Extra:         extra,
+		Constraints:   constraints,
 	})
 	return err
 }
@@ -412,9 +416,11 @@ func goToPositionUsingCartesianMotion(
 	fsSvc framesystem.Service,
 	armName string,
 	extra map[string]any,
+	constraints *motionplan.Constraints,
 	logger logging.Logger,
 ) error {
 	logger.Debugf("going to position using cartesian motion")
+	logger.Debugf("constraints: %#v", constraints)
 
 	// Check if we are already close enough
 	current, err := fsSvc.GetPose(ctx, armName, referenceframe.World, nil, nil)
@@ -450,6 +456,7 @@ func goToPositionUsingCartesianMotion(
 			ComponentName: armName,
 			Destination:   pif,
 			WorldState:    worldState,
+			Constraints:   constraints,
 			Extra:         extra,
 		},
 	)

@@ -53,7 +53,10 @@
     "vision_services": ["<name of vision service>"],
 
     // optional - options passed as 'extra' to motion.Move or arm.MoveToJointPositions
-    "extra" : "<options>"
+    "extra" : "<options>",
+
+    // optional - motion constraints passed to motion.Move (only used when motion service is set)
+    "constraints" : < ... >
 }
 ```
 
@@ -75,7 +78,10 @@
     "vision_services": ["<name of vision service>"],
 
     // optional - options passed as 'extra' to motion.Move or arm.MoveToJointPositions
-    "extra" : "<options>"
+    "extra" : "<options>",
+
+    // optional - motion constraints passed to motion.Move (only used when motion service is set)
+    "constraints" : < ... >
 }
 ```
 

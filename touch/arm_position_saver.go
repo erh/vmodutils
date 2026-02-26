@@ -205,7 +205,7 @@ func (aps *ArmPositionSaver) goToSavePosition(ctx context.Context) error {
 	}
 
 	if aps.motion != nil {
-		return goToPositionUsingCartesianMotion(ctx, aps.cfg.Point, aps.cfg.Orientation, aps.motion, aps.visionServices, aps.fsSvc, aps.arm.Name().Name, aps.cfg.Extra, aps.logger)
+		return goToPositionUsingCartesianMotion(ctx, aps.cfg.Point, aps.cfg.Orientation, aps.motion, aps.visionServices, aps.fsSvc, aps.arm.Name().Name, aps.cfg.Extra, aps.cfg.Constraints, aps.logger)
 	}
 
 	return fmt.Errorf("need to configure where to go")

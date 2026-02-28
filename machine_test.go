@@ -152,7 +152,7 @@ func TestUpdateComponentAttributesInPlace(t *testing.T) {
 			description:   "really bad machine config",
 			componentName: "c1",
 			machineConfig: nil,
-			expectedErr:   fmt.Errorf("no components %T", nil),
+			expectedErr:   fmt.Errorf("didn't find component with name c1"),
 		},
 	}
 	for _, tt := range cases {
@@ -201,7 +201,7 @@ func TestUpdateComponentOrServiceConfig(t *testing.T) {
 			componentName: "c1",
 			shouldBeFound: false,
 			machineConfig: nil,
-			expectedErr:   fmt.Errorf("no components %T", nil),
+			expectedErr:   nil,
 		},
 	}
 	for _, tt := range cases {

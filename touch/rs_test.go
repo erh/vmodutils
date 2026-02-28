@@ -18,12 +18,12 @@ func TestRSPixelToPoint(t *testing.T) {
 
 	x, y, z := 592.0, 499.0, 459.601175
 
-	xx, yy, zz := PixelToPoint(RealSenseProperties, x, y, z)
+	xx, yy, zz := PixelToPoint(RealSensePropertiesD435At1280by720, x, y, z)
 	test.That(t, xx, test.ShouldAlmostEqual, -27.87, .01)
 	test.That(t, yy, test.ShouldAlmostEqual, 63.23, .01)
 	test.That(t, zz, test.ShouldAlmostEqual, z)
 
-	xxx, yyy, zzz := RSPixelToPoint(RealSenseProperties, x, y, z)
+	xxx, yyy, zzz := RSPixelToPoint(RealSensePropertiesD435At1280by720, x, y, z)
 	test.That(t, zzz, test.ShouldAlmostEqual, z)
 
 	// TODO - i think this is wrong??

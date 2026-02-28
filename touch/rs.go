@@ -5,7 +5,7 @@ import (
 	"go.viam.com/rdk/rimage/transform"
 )
 
-var RealSenseProperties = camera.Properties{
+var RealSensePropertiesD435At1280by720 = camera.Properties{
 	IntrinsicParams:  &transform.PinholeCameraIntrinsics{Width: 1280, Height: 720, Fx: 906.0663452148438, Fy: 905.1234741210938, Ppx: 646.94970703125, Ppy: 374.4667663574219},
 	DistortionParams: &transform.BrownConrady{RadialK1: 0, RadialK2: 0, RadialK3: 0, TangentialP1: 0, TangentialP2: 0},
 }

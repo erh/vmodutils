@@ -11,6 +11,7 @@ import (
 	"go.viam.com/rdk/components/arm"
 	toggleswitch "go.viam.com/rdk/components/switch"
 	"go.viam.com/rdk/logging"
+	"go.viam.com/rdk/motionplan"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/robot/framesystem"
 	"go.viam.com/rdk/services/motion"
@@ -34,12 +35,13 @@ func init() {
 }
 
 type MultiArmPositionSwitchConfig struct {
-	Arm                          string         `json:"arm,omitempty"`
-	JointsList                   [][]float64    `json:"joints_list,omitempty"`
-	Motion                       string         `json:"motion,omitempty"`
-	VisionServices               []string       `json:"vision_services,omitempty"`
-	Extra                        map[string]any `json:"extra,omitempty"`
-	WriteFilesToCaptureDirectory bool           `json:"write_files_to_capture_directory,omitempty"`
+	Arm                          string                  `json:"arm,omitempty"`
+	JointsList                   [][]float64             `json:"joints_list,omitempty"`
+	Motion                       string                  `json:"motion,omitempty"`
+	VisionServices               []string                `json:"vision_services,omitempty"`
+	Extra                        map[string]any          `json:"extra,omitempty"`
+	Constraints                  *motionplan.Constraints `json:"constraints,omitempty"`
+	WriteFilesToCaptureDirectory bool                    `json:"write_files_to_capture_directory,omitempty"`
 }
 
 func (c *MultiArmPositionSwitchConfig) Validate(path string) ([]string, []string, error) {
@@ -206,7 +208,7 @@ func (maps *MultiArmPositionSwitch) goToPosition(ctx context.Context, position u
 
 	var moveErr error
 	if maps.motion != nil {
-		moveErr = goToPositionUsingJointToJointMotion(ctx, joints, maps.arm.Name().Name, maps.motion, maps.visionServices, maps.cfg.Extra, maps.logger)
+		moveErr = goToPositionUsingJointToJointMotion(ctx, joints, maps.arm.Name().Name, maps.motion, maps.visionServices, maps.cfg.Extra, maps.cfg.Constraints, maps.logger)
 	} else {
 		moveErr = goToPositionUsingMoveToJointPositions(ctx, joints, maps.arm, maps.cfg.Extra, maps.logger)
 	}

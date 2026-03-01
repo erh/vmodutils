@@ -10,6 +10,7 @@ import (
 	"go.viam.com/rdk/components/arm"
 	toggleswitch "go.viam.com/rdk/components/switch"
 	"go.viam.com/rdk/logging"
+	"go.viam.com/rdk/motionplan"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/robot/framesystem"
 	"go.viam.com/rdk/services/motion"
@@ -38,6 +39,7 @@ type ArmPositionSaverConfig struct {
 	Point          r3.Vector                            `json:"point,omitzero"`
 	Orientation    spatialmath.OrientationVectorDegrees `json:"orientation,omitzero"`
 	VisionServices []string                             `json:"vision_services,omitempty"`
+	Constraints    *motionplan.Constraints              `json:"constraints,omitempty"`
 	Extra          map[string]interface{}               `json:"extra,omitempty"`
 }
 
@@ -75,6 +77,7 @@ func newArmPositionSaver(ctx context.Context, deps resource.Dependencies, config
 	if err != nil {
 		return nil, err
 	}
+	logger.Infof("config: %#v", newConf)
 
 	aps := &ArmPositionSaver{
 		name:   config.ResourceName(),
@@ -169,8 +172,11 @@ func (aps *ArmPositionSaver) GetNumberOfPositions(ctx context.Context, extra map
 
 func (aps *ArmPositionSaver) saveCurrentPosition(ctx context.Context) error {
 	newConfig := utils.AttributeMap{
-		"arm":    aps.cfg.Arm,
-		"motion": aps.cfg.Motion,
+		"arm":             aps.cfg.Arm,
+		"motion":          aps.cfg.Motion,
+		"vision_services": aps.cfg.VisionServices,
+		"constraints":     aps.cfg.Constraints,
+		"extra":           aps.cfg.Extra,
 	}
 
 	if aps.cfg.Motion == "" {
@@ -195,14 +201,14 @@ func (aps *ArmPositionSaver) saveCurrentPosition(ctx context.Context) error {
 func (aps *ArmPositionSaver) goToSavePosition(ctx context.Context) error {
 	if len(aps.cfg.Joints) > 0 {
 		if aps.motion != nil {
-			return goToPositionUsingJointToJointMotion(ctx, aps.cfg.Joints, aps.arm.Name().Name, aps.motion, aps.visionServices, aps.cfg.Extra, aps.logger)
+			return goToPositionUsingJointToJointMotion(ctx, aps.cfg.Joints, aps.arm.Name().Name, aps.motion, aps.visionServices, aps.cfg.Extra, aps.cfg.Constraints, aps.logger)
+		} else {
+			return goToPositionUsingMoveToJointPositions(ctx, aps.cfg.Joints, aps.arm, aps.cfg.Extra, aps.logger)
 		}
-
-		return goToPositionUsingMoveToJointPositions(ctx, aps.cfg.Joints, aps.arm, aps.cfg.Extra, aps.logger)
 	}
 
 	if aps.motion != nil {
-		return goToPositionUsingCartesianMotion(ctx, aps.cfg.Point, aps.cfg.Orientation, aps.motion, aps.visionServices, aps.fsSvc, aps.arm.Name().Name, aps.cfg.Extra, aps.logger)
+		return goToPositionUsingCartesianMotion(ctx, aps.cfg.Point, aps.cfg.Orientation, aps.motion, aps.visionServices, aps.fsSvc, aps.arm.Name().Name, aps.cfg.Extra, aps.cfg.Constraints, aps.logger)
 	}
 
 	return fmt.Errorf("need to configure where to go")

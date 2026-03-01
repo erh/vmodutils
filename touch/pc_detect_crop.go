@@ -189,8 +189,16 @@ func PCLimitToImageBoxes(
 
 	out := pointcloud.NewBasicEmpty()
 
+	var outerError error
+
 	pc.Iterate(0, 0, func(p r3.Vector, d pointcloud.Data) bool {
-		x, y := props.IntrinsicParams.PointToPixel(p.X, p.Y, p.Z)
+		x, y, err := props.PointToPixel(p)
+		if err != nil {
+			if outerError == nil {
+				outerError = err
+			}
+			return false
+		}
 
 		inBox := false
 		for _, b := range boxes {
@@ -217,6 +225,10 @@ func PCLimitToImageBoxes(
 
 		return true
 	})
+
+	if outerError != nil {
+		return nil, outerError
+	}
 
 	return out, nil
 }

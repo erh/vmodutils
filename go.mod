@@ -5,7 +5,7 @@ go 1.25.1
 require (
 	github.com/golang/geo v0.0.0-20230421003525-6adc56603217
 	github.com/lucasb-eyer/go-colorful v1.2.0
-	go.viam.com/rdk v0.115.0-rc0.0.20260301002038-0b5c1242ad03
+	go.viam.com/rdk v0.115.0-rc0.0.20260302155338-94d42123e364
 	go.viam.com/test v1.2.4
 	go.viam.com/utils v0.4.3
 	neilpa.me/go-stl v0.5.0
@@ -248,7 +248,7 @@ require (
 	go.uber.org/goleak v1.3.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	go.viam.com/api v0.1.523-0.20260301001748-e96a0b704aa5 // indirect
+	go.viam.com/api v0.1.523-0.20260302153744-0499e9687c68 // indirect
 	go4.org/unsafe/assume-no-moving-gc v0.0.0-20230525183740-e7c30c78aeb2 // indirect
 	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/exp v0.0.0-20251113190631-e25ba8c21ef6 // indirect

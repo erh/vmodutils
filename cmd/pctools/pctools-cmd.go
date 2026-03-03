@@ -134,6 +134,10 @@ func realMain() error {
 			return err
 		}
 		logger.Infof("props - IntrinsicParams %T %v", props.IntrinsicParams, props.IntrinsicParams)
+		if props.ExtrinsicParams != nil {
+			logger.Infof("props - ExtrinsicParams Translation %v", props.ExtrinsicParams.Translation)
+			logger.Infof("props - ExtrinsicParams Orientation %#v", props.ExtrinsicParams.Orientation)
+		}
 		logger.Infof("props - DistortionParams %T %v", props.DistortionParams, props.DistortionParams)
 
 		return nil

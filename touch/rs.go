@@ -11,7 +11,7 @@ var RealSensePropertiesD435At1280by720 = camera.Properties{
 	IntrinsicParams:  &transform.PinholeCameraIntrinsics{Width: 1280, Height: 720, Fx: 906.0663452148438, Fy: 905.1234741210938, Ppx: 646.94970703125, Ppy: 374.4667663574219},
 	DistortionParams: &transform.BrownConrady{RadialK1: 0, RadialK2: 0, RadialK3: 0, TangentialP1: 0, TangentialP2: 0},
 	ExtrinsicParams: &camera.ExtrinsicParams{
-		Translation: r3.Vector{X: 14.8, Y: 0, Z: 0},
+		Translation: r3.Vector{-14.697575941681861877441406, -0.145817903103306889533997, -0.678424548823386430740356},
 	},
 }
 

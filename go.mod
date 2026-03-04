@@ -5,7 +5,7 @@ go 1.25.1
 require (
 	github.com/golang/geo v0.0.0-20230421003525-6adc56603217
 	github.com/lucasb-eyer/go-colorful v1.2.0
-	go.viam.com/rdk v0.115.0-rc0.0.20260304001300-42a66a85c921
+	go.viam.com/rdk v0.115.0-rc0.0.20260304042815-36ffd10a62d2
 	go.viam.com/test v1.2.4
 	go.viam.com/utils v0.4.11
 	neilpa.me/go-stl v0.5.0

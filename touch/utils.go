@@ -317,7 +317,7 @@ func GetPointCloudsFromPositions(ctx context.Context, positions []toggleswitch.S
 	return pcsInWorld, nil
 }
 
-func MergedPointClouds(ctx context.Context, pcs []pointcloud.PointCloud, writeFilesToCaptureDirectory bool) (pointcloud.PointCloud, error) {
+func MergedPointCloud(ctx context.Context, pcs []pointcloud.PointCloud, writeFilesToCaptureDirectory bool) (pointcloud.PointCloud, error) {
 	// If a traceID is present, we will write files to a traceID sub-directory in the capture directory.
 	// Otherwise, we will write files at the top-level of the capture directory.
 	traceID := getTraceID(ctx)
@@ -352,7 +352,7 @@ func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswi
 	if err != nil {
 		return nil, err
 	}
-	return MergedPointClouds(ctx, pcs, writeFilesToCaptureDirectory)
+	return MergedPointCloud(ctx, pcs, writeFilesToCaptureDirectory)
 }
 
 func buildWorldStateWithObstacles(ctx context.Context, visionSvcs []vision.Service) (*referenceframe.WorldState, error) {

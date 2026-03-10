@@ -149,13 +149,12 @@ func (aps *ArmPositionSaver) DoCommand(ctx context.Context, cmd map[string]inter
 }
 
 func (aps *ArmPositionSaver) SetPosition(ctx context.Context, position uint32, extra map[string]interface{}) error {
+	aps.switchPosition = position
 	if position == 0 {
-		aps.switchPosition = position
 		return nil
 	}
 
 	if position == 1 {
-		aps.switchPosition = position
 		err := aps.saveCurrentPosition(ctx)
 		// go back to idle once done
 		aps.switchPosition = 0
@@ -163,7 +162,6 @@ func (aps *ArmPositionSaver) SetPosition(ctx context.Context, position uint32, e
 	}
 
 	if position == 2 {
-		aps.switchPosition = position
 		err := aps.goToSavePosition(ctx)
 		// go back to idle once done
 		aps.switchPosition = 0

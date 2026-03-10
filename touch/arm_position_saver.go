@@ -158,7 +158,7 @@ func (aps *ArmPositionSaver) SetPosition(ctx context.Context, position uint32, e
 		aps.switchPosition = position
 		err := aps.saveCurrentPosition(ctx)
 		// go back to idle once done
-		// aps.switchPosition = 0
+		aps.switchPosition = 0
 		return err
 	}
 
@@ -166,7 +166,7 @@ func (aps *ArmPositionSaver) SetPosition(ctx context.Context, position uint32, e
 		aps.switchPosition = position
 		err := aps.goToSavePosition(ctx)
 		// go back to idle once done
-		// aps.switchPosition = 0
+		aps.switchPosition = 0
 		return err
 	}
 

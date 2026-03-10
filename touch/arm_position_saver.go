@@ -80,10 +80,11 @@ func newArmPositionSaver(ctx context.Context, deps resource.Dependencies, config
 	logger.Infof("config: %#v", newConf)
 
 	aps := &ArmPositionSaver{
-		name:   config.ResourceName(),
-		cfg:    newConf,
-		logger: logger,
-		arm:    arm,
+		name:           config.ResourceName(),
+		switchPosition: 0,
+		cfg:            newConf,
+		logger:         logger,
+		arm:            arm,
 	}
 
 	if newConf.Motion != "" {
@@ -119,6 +120,7 @@ type ArmPositionSaver struct {
 	cfg    *ArmPositionSaverConfig
 	logger logging.Logger
 
+	switchPosition uint32
 	arm            arm.Arm
 	motion         motion.Service
 	visionServices []vision.Service
@@ -148,22 +150,31 @@ func (aps *ArmPositionSaver) DoCommand(ctx context.Context, cmd map[string]inter
 
 func (aps *ArmPositionSaver) SetPosition(ctx context.Context, position uint32, extra map[string]interface{}) error {
 	if position == 0 {
+		aps.switchPosition = position
 		return nil
 	}
 
 	if position == 1 {
-		return aps.saveCurrentPosition(ctx)
+		aps.switchPosition = position
+		err := aps.saveCurrentPosition(ctx)
+		// go back to idle once done
+		// aps.switchPosition = 0
+		return err
 	}
 
 	if position == 2 {
-		return aps.goToSavePosition(ctx)
+		aps.switchPosition = position
+		err := aps.goToSavePosition(ctx)
+		// go back to idle once done
+		// aps.switchPosition = 0
+		return err
 	}
 
 	return fmt.Errorf("bad position: %d", position)
 }
 
 func (aps *ArmPositionSaver) GetPosition(ctx context.Context, extra map[string]interface{}) (uint32, error) {
-	return 0, nil
+	return aps.switchPosition, nil
 }
 
 func (aps *ArmPositionSaver) GetNumberOfPositions(ctx context.Context, extra map[string]interface{}) (uint32, []string, error) {

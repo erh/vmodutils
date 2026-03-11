@@ -5,9 +5,9 @@ go 1.25.1
 require (
 	github.com/golang/geo v0.0.0-20230421003525-6adc56603217
 	github.com/lucasb-eyer/go-colorful v1.2.0
-	go.viam.com/rdk v0.115.0-rc0.0.20260304042815-36ffd10a62d2
+	go.viam.com/rdk v0.115.0-rc0.0.20260302172525-7153ec566a19
 	go.viam.com/test v1.2.4
-	go.viam.com/utils v0.4.11
+	go.viam.com/utils v0.4.3
 	neilpa.me/go-stl v0.5.0
 )
 
@@ -27,7 +27,6 @@ require (
 	codeberg.org/go-fonts/liberation v0.5.0 // indirect
 	codeberg.org/go-latex/latex v0.1.0 // indirect
 	codeberg.org/go-pdf/fpdf v0.10.0 // indirect
-	contrib.go.opencensus.io/exporter/jaeger v0.2.1 // indirect
 	contrib.go.opencensus.io/exporter/stackdriver v0.13.4 // indirect
 	git.sr.ht/~sbinet/gg v0.6.0 // indirect
 	github.com/Masterminds/semver/v3 v3.3.1 // indirect
@@ -213,7 +212,6 @@ require (
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
-	github.com/uber/jaeger-client-go v2.25.0+incompatible // indirect
 	github.com/ulikunitz/xz v0.5.15 // indirect
 	github.com/urfave/cli/v2 v2.10.3 // indirect
 	github.com/viamrobotics/ice/v2 v2.3.40 // indirect

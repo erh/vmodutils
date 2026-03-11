@@ -71,7 +71,7 @@
 
     // list of arm joint positions
     // the list needs to contain at least one set of joint positions
-    "joints" : [[0, 0, 0, 0, 0, 0], ...],
+    "joints_list" : [[0, 0, 0, 0, 0, 0], ...],
 
     // optional - if set, the Geometry objects in the vision services' GetObjectPointClouds results
     // are added to the world state passed to the motion service

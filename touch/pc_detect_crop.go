@@ -13,7 +13,6 @@ import (
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/pointcloud"
 	"go.viam.com/rdk/resource"
-	"go.viam.com/rdk/rimage"
 	"go.viam.com/rdk/services/vision"
 	"go.viam.com/rdk/spatialmath"
 	"go.viam.com/rdk/vision/objectdetection"
@@ -114,21 +113,6 @@ func (dcc *detectCropCamera) Geometries(ctx context.Context, _ map[string]interf
 
 func (dcc *detectCropCamera) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
 	return nil, nil
-}
-
-func (dcc *detectCropCamera) Image(ctx context.Context, mimeType string, extra map[string]interface{}) ([]byte, camera.ImageMetadata, error) {
-	pc, err := dcc.NextPointCloud(ctx, extra)
-	if err != nil {
-		return nil, camera.ImageMetadata{}, err
-	}
-	img := PCToImage(pc)
-
-	data, err := rimage.EncodeImage(ctx, img, mimeType)
-	if err != nil {
-		return nil, camera.ImageMetadata{}, err
-	}
-
-	return data, camera.ImageMetadata{MimeType: mimeType}, err
 }
 
 func (dcc *detectCropCamera) Images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {

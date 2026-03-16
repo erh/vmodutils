@@ -10,7 +10,6 @@ import (
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/pointcloud"
 	"go.viam.com/rdk/resource"
-	"go.viam.com/rdk/rimage"
 	"go.viam.com/rdk/spatialmath"
 
 	"github.com/erh/vmodutils"
@@ -74,21 +73,6 @@ type MergeCamera struct {
 
 func (mapc *MergeCamera) Name() resource.Name {
 	return mapc.name
-}
-
-func (mapc *MergeCamera) Image(ctx context.Context, mimeType string, extra map[string]interface{}) ([]byte, camera.ImageMetadata, error) {
-	pc, err := mapc.NextPointCloud(ctx, extra)
-	if err != nil {
-		return nil, camera.ImageMetadata{}, err
-	}
-	img := PCToImage(pc)
-
-	data, err := rimage.EncodeImage(ctx, img, mimeType)
-	if err != nil {
-		return nil, camera.ImageMetadata{}, err
-	}
-
-	return data, camera.ImageMetadata{MimeType: mimeType}, err
 }
 
 func (mapc *MergeCamera) Images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {

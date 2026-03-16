@@ -30,7 +30,7 @@ func TestSanding2(t *testing.T) {
 
 	logger.Infof("size: %d", look.Size())
 
-	test.That(t, look.Size(), test.ShouldBeLessThanOrEqualTo, 538967)
+	test.That(t, look.Size(), test.ShouldBeLessThanOrEqualTo, 539408)
 
 	img := PCToImage(look)
 

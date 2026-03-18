@@ -186,9 +186,7 @@ func (cc *cropCamera) doNextPointCloud(ctx context.Context, extra map[string]int
 	pc = PCCropWithColor(pc, cc.cfg.Min, cc.cfg.Max, cc.cfg.GoodColors)
 	timeC := time.Since(start)
 
-	if timeC > (time.Millisecond * 250) {
-		cc.logger.Infof("cropCamera::NextPointCloud timeA: %v timeB: %v timeC: %v", timeA, timeB, timeC)
-	}
+	cc.logger.Debugf("cropCamera::NextPointCloud timeA: %v timeB: %v timeC: %v", timeA, timeB, timeC)
 
 	return pc, nil
 

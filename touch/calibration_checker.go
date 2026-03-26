@@ -114,7 +114,7 @@ func (c *calibrationChecker) check(ctx context.Context) (map[string]interface{},
 	result := map[string]interface{}{}
 
 	type worldPoint struct {
-		name string
+		name    string
 		x, y, z float64
 	}
 	var points []worldPoint
@@ -132,10 +132,13 @@ func (c *calibrationChecker) check(ctx context.Context) (map[string]interface{},
 			continue
 		}
 		result[name+"_visible"] = true
+		result[name+"_frame"] = tagPose.Parent()
+		c.logger.Debugf("tracker %s: tag %q pose parent frame=%q", name, tagID, tagPose.Parent())
 
 		worldPose, err := c.robot.TransformPose(ctx, tagPose, "world", nil)
 		if err != nil {
 			result[name+"_transform_error"] = err.Error()
+			c.logger.Warnf("tracker %s: TransformPose from %q to world failed: %v", name, tagPose.Parent(), err)
 			continue
 		}
 		pt := worldPose.Pose().Point()

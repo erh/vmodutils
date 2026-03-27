@@ -9,7 +9,7 @@ import (
 	"go.viam.com/rdk/components/sensor"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/resource"
-	"go.viam.com/rdk/robot"
+	"go.viam.com/rdk/robot/framesystem"
 
 	"github.com/erh/vmodutils"
 )
@@ -37,6 +37,7 @@ func (c *CalibrationCheckerConfig) Validate(path string) ([]string, []string, er
 	}
 	deps := make([]string, len(c.PoseTrackers))
 	copy(deps, c.PoseTrackers)
+	deps = append(deps, framesystem.PublicServiceName.String())
 	return deps, nil, nil
 }
 
@@ -68,7 +69,7 @@ func newCalibrationChecker(ctx context.Context, deps resource.Dependencies, conf
 		}
 	}
 
-	r, err := vmodutils.ConnectToMachineFromEnv(ctx, logger)
+	fs, err := framesystem.FromDependencies(deps)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +78,7 @@ func newCalibrationChecker(ctx context.Context, deps resource.Dependencies, conf
 		name:     conf.ResourceName(),
 		config:   config,
 		trackers: trackers,
-		robot:    r,
+		fs:       fs,
 		logger:   logger,
 	}, nil
 }
@@ -88,12 +89,12 @@ type calibrationChecker struct {
 	name     resource.Name
 	config   *CalibrationCheckerConfig
 	trackers []posetracker.PoseTracker
-	robot    robot.Robot
+	fs       framesystem.Service
 	logger   logging.Logger
 }
 
 func (c *calibrationChecker) Close(ctx context.Context) error {
-	return c.robot.Close(ctx)
+	return nil
 }
 
 func (c *calibrationChecker) Name() resource.Name {
@@ -135,7 +136,7 @@ func (c *calibrationChecker) check(ctx context.Context) (map[string]interface{},
 		result[name+"_frame"] = tagPose.Parent()
 		c.logger.Debugf("tracker %s: tag %q pose parent frame=%q", name, tagID, tagPose.Parent())
 
-		worldPose, err := c.robot.TransformPose(ctx, tagPose, "world", nil)
+		worldPose, err := c.fs.TransformPose(ctx, tagPose, "world", nil)
 		if err != nil {
 			result[name+"_transform_error"] = err.Error()
 			c.logger.Warnf("tracker %s: TransformPose from %q to world failed: %v", name, tagPose.Parent(), err)

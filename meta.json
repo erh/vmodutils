@@ -64,6 +64,11 @@
         "model": "erh:vmodutils:multi-arm-position-switch",
         "markdown_link": "README.md#multi-arm-position-switch",
         "short_description": "allows configuring a list of arm positions and going to a position by index in the list"
+    },
+    {
+        "api": "rdk:component:sensor",
+        "model": "erh:vmodutils:calibration-checker",
+        "short_description": "compares world-frame tag positions across 2+ pose trackers to detect arm drift"
     }
   ],
   "applications": null,

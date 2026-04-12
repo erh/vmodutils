@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"go.viam.com/rdk/app"
-	"go.viam.com/rdk/cli"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/robot"
@@ -73,7 +72,7 @@ func ConnectToHostFromCLIToken(ctx context.Context, host string, logger logging.
 		return nil, fmt.Errorf("need to specify host")
 	}
 
-	c, err := cli.ConfigFromCache(nil)
+	c, err := utils.ConfigFromPath(utils.GetCLICachePath())
 	if err != nil {
 		return nil, err
 	}

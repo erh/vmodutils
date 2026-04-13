@@ -131,6 +131,10 @@ func (aps *ArmPositionSaver) Name() resource.Name {
 	return aps.name
 }
 
+func (aps *ArmPositionSaver) Status(ctx context.Context) (map[string]interface{}, error) {
+	return map[string]interface{}{}, nil
+}
+
 func (aps *ArmPositionSaver) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
 	if cmd["cfg"] == true {
 		jsonData, err := json.Marshal(aps.cfg)

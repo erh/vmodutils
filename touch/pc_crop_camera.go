@@ -92,6 +92,10 @@ func (cc *cropCamera) Name() resource.Name {
 	return cc.name
 }
 
+func (cc *cropCamera) Status(ctx context.Context) (map[string]interface{}, error) {
+	return map[string]interface{}{}, nil
+}
+
 func (cc *cropCamera) Images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	pc, err := cc.NextPointCloud(ctx, extra)
 	if err != nil {

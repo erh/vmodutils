@@ -275,3 +275,7 @@ func (cs *ClusterService) DoCommand(ctx context.Context, cmd map[string]interfac
 func (cs *ClusterService) Name() resource.Name {
 	return cs.name
 }
+
+func (cs *ClusterService) Status(ctx context.Context) (map[string]interface{}, error) {
+	return map[string]interface{}{}, nil
+}

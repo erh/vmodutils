@@ -75,6 +75,10 @@ func (mapc *MergeCamera) Name() resource.Name {
 	return mapc.name
 }
 
+func (mapc *MergeCamera) Status(ctx context.Context) (map[string]interface{}, error) {
+	return map[string]interface{}{}, nil
+}
+
 func (mapc *MergeCamera) Images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	pc, err := mapc.NextPointCloud(ctx, extra)
 	if err != nil {

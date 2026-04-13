@@ -101,6 +101,10 @@ func (mapc *MultipleArmPosesCamera) Name() resource.Name {
 	return mapc.name
 }
 
+func (mapc *MultipleArmPosesCamera) Status(ctx context.Context) (map[string]interface{}, error) {
+	return map[string]interface{}{}, nil
+}
+
 func (mapc *MultipleArmPosesCamera) Images(ctx context.Context, _ []string, _ map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	return nil, resource.ResponseMetadata{}, fmt.Errorf("image not supported")
 }

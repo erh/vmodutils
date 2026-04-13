@@ -96,6 +96,10 @@ func (o *Obstacle) Name() resource.Name {
 	return o.name
 }
 
+func (o *Obstacle) Status(ctx context.Context) (map[string]interface{}, error) {
+	return map[string]interface{}{}, nil
+}
+
 func (o *Obstacle) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
 	return nil, nil
 }

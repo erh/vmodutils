@@ -139,6 +139,10 @@ func (maps *MultiArmPositionSwitch) Name() resource.Name {
 	return maps.name
 }
 
+func (maps *MultiArmPositionSwitch) Status(ctx context.Context) (map[string]interface{}, error) {
+	return map[string]interface{}{}, nil
+}
+
 func (maps *MultiArmPositionSwitch) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
 	return nil, resource.ErrDoUnimplemented
 }

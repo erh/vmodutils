@@ -101,6 +101,10 @@ func (c *calibrationChecker) Name() resource.Name {
 	return c.name
 }
 
+func (c *calibrationChecker) Status(ctx context.Context) (map[string]interface{}, error) {
+	return map[string]interface{}{}, nil
+}
+
 func (c *calibrationChecker) Readings(ctx context.Context, extra map[string]interface{}) (map[string]interface{}, error) {
 	return c.check(ctx)
 }

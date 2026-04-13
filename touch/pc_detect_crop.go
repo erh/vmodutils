@@ -101,6 +101,10 @@ func (dcc *detectCropCamera) Name() resource.Name {
 	return dcc.name
 }
 
+func (dcc *detectCropCamera) Status(ctx context.Context) (map[string]interface{}, error) {
+	return map[string]interface{}{}, nil
+}
+
 func (dcc *detectCropCamera) Properties(ctx context.Context) (camera.Properties, error) {
 	return camera.Properties{
 		SupportsPCD: true,

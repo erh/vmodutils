@@ -17,6 +17,9 @@ import (
 )
 
 func GetPathInCaptureDir(subDirName string) string {
+	if viamHome := os.Getenv(rutils.HomeEnvVar); viamHome != "" {
+		return filepath.Join(viamHome, "capture", subDirName)
+	}
 	return filepath.Join(shared.ViamCaptureDotDir, subDirName)
 }
 

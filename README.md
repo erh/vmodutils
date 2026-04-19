@@ -124,3 +124,18 @@ looks at the center of a point cloud and gets just that
     "use_color" : "<bool>" // optional
 }
 ```
+
+## session capture
+Generic sensor meant to be wired into the data manager's `capture_control_sensor`. Its `Readings` publishes an `overrides` array — one entry per configured component — that the data manager applies to drive capture frequency and tags. `DoCommand` with `{"start-capture": true}` stamps a new session tag (`<prefix><timestamp>`) and turns capture on; `{"stop-capture": true}` zeros the frequency and tags with `<prefix>stopped`.
+```
+{
+    "components" : [
+        {
+            "resource_name" : "<resource>",
+            "method" : "<capture method>",
+            "capture_frequency_hz" : 10 // optional, defaults to 10
+        }
+    ],
+    "tag_prefix" : "<optional prefix prepended to tags>"
+}
+```

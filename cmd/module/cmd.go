@@ -9,6 +9,7 @@ import (
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/services/vision"
 
+	"github.com/erh/vmodutils"
 	"github.com/erh/vmodutils/touch"
 )
 
@@ -25,6 +26,7 @@ func main() {
 		resource.APIModel{camera.API, touch.LookAtCameraModel},
 		resource.APIModel{toggleswitch.API, touch.MultiArmPositionSwitchModel},
 		resource.APIModel{sensor.API, touch.CalibrationCheckerModel},
+		resource.APIModel{sensor.API, vmodutils.SessionCaptureModel},
 	)
 
 }

@@ -69,6 +69,12 @@
         "api": "rdk:component:sensor",
         "model": "erh:vmodutils:calibration-checker",
         "short_description": "compares world-frame tag positions across 2+ pose trackers to detect arm drift"
+    },
+    {
+        "api": "rdk:component:sensor",
+        "model": "erh:vmodutils:session-capture",
+        "markdown_link": "README.md#session-capture",
+        "short_description": "switch that toggles data-capture overrides for a list of components, tagging them with a session id"
     }
   ],
   "applications": null,

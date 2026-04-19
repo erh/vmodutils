@@ -95,23 +95,28 @@ func (s *sessionCapture) Readings(ctx context.Context, extra map[string]interfac
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if !s.active {
-		return nil, nil
+	res := map[string]interface{}{
+		"active": s.active,
 	}
 
-	overrides := []interface{}{}
-	for _, comp := range s.config.Components {
-		overrides = append(overrides, map[string]interface{}{
-			"resource_name":        comp.ResourceName,
-			"method":               comp.Method,
-			"capture_frequency_hz": comp.frequency(),
-			"tags":                 s.capTags,
-		})
+	if s.active {
+		tags := make([]interface{}, len(s.capTags))
+		for i, t := range s.capTags {
+			tags[i] = t
+		}
+		overrides := []interface{}{}
+		for _, comp := range s.config.Components {
+			overrides = append(overrides, map[string]interface{}{
+				"resource_name":        comp.ResourceName,
+				"method":               comp.Method,
+				"capture_frequency_hz": comp.frequency(),
+				"tags":                 tags,
+			})
+		}
+		res["overrides"] = overrides
 	}
 
-	return map[string]interface{}{
-		"overrides": overrides,
-	}, nil
+	return res, nil
 }
 
 func (s *sessionCapture) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {

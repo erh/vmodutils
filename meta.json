@@ -8,72 +8,75 @@
     {
         "api": "rdk:component:camera",
         "model": "erh:vmodutils:pc-crop-camera",
-        "markdown_link": "README.md#pc-crop-camera",
+        "markdown_link": "README.md#model-erhvmodutilspc-crop-camera",
         "short_description": "crops a pointcloud"
     },
     {
         "api": "rdk:component:camera",
         "model": "erh:vmodutils:pc-detect-crop-camera",
-        "markdown_link": "README.md#pc-detect-crop-camera",
+        "markdown_link": "README.md#model-erhvmodutilspc-detect-crop-camera",
         "short_description": "crops a pointcloud based on vision detections"
     },
     {
         "api": "rdk:component:camera",
         "model": "erh:vmodutils:pc-merge",
-        "markdown_link": "README.md#pc-merge",
+        "markdown_link": "README.md#model-erhvmodutilspc-merge",
         "short_description": "merges pointclouds"
     },
 
     {
         "api": "rdk:component:camera",
         "model": "erh:vmodutils:pc-multiple-arm-poses",
-        "markdown_link": "README.md#pc-multiple-arm-poses",
+        "markdown_link": "README.md#model-erhvmodutilspc-multiple-arm-poses",
         "short_description": "moves an arm to multiple positions and merges pointcloud"
     },
     {
         "api": "rdk:component:switch",
         "model": "erh:vmodutils:arm-position-saver",
-        "markdown_link": "README.md#arm-position-saver",
+        "markdown_link": "README.md#model-erhvmodutilsarm-position-saver",
         "short_description": "saves an arm position and let's you go there"
     },
     {
         "api": "rdk:component:gripper",
         "model": "erh:vmodutils:obstacle",
-        "markdown_link": "README.md#obstacle",
+        "markdown_link": "README.md#model-erhvmodutilsobstacle",
         "short_description": "obstacle, doesn't do anything but get in the way"
     },
     {
         "api": "rdk:component:gripper",
         "model": "erh:vmodutils:obstacle-open-box",
-        "markdown_link": "README.md#obstacle-open-box",
+        "markdown_link": "README.md#model-erhvmodutilsobstacle-open-box",
         "short_description": "open box obstacle, doesn't do anything but get in the way"
     },
     {
         "api": "rdk:service:vision",
-        "model": "erh:vmodutils:pc-cluster"
+        "model": "erh:vmodutils:pc-cluster",
+        "markdown_link": "README.md#model-erhvmodutilspc-cluster",
+        "short_description": "segments a camera's pointcloud into spatial clusters"
     },
     {
         "api": "rdk:component:camera",
         "model": "erh:vmodutils:pc-look-at-crop-camera",
-        "markdown_link": "README.md#pc-look-at-crop-camera",
+        "markdown_link": "README.md#model-erhvmodutilspc-look-at-crop-camera",
         "short_description": "looks at the center of a point cloud and gets just that"
 
     },
     {
         "api": "rdk:component:switch",
         "model": "erh:vmodutils:multi-arm-position-switch",
-        "markdown_link": "README.md#multi-arm-position-switch",
+        "markdown_link": "README.md#model-erhvmodutilsmulti-arm-position-switch",
         "short_description": "allows configuring a list of arm positions and going to a position by index in the list"
     },
     {
         "api": "rdk:component:sensor",
         "model": "erh:vmodutils:calibration-checker",
+        "markdown_link": "README.md#model-erhvmodutilscalibration-checker",
         "short_description": "compares world-frame tag positions across 2+ pose trackers to detect arm drift"
     },
     {
         "api": "rdk:component:sensor",
         "model": "erh:vmodutils:session-capture",
-        "markdown_link": "README.md#session-capture",
+        "markdown_link": "README.md#model-erhvmodutilssession-capture",
         "short_description": "switch that toggles data-capture overrides for a list of components, tagging them with a session id"
     }
   ],

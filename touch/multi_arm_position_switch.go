@@ -14,6 +14,7 @@ import (
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/motionplan"
 	"go.viam.com/rdk/resource"
+	"go.viam.com/rdk/robot"
 	"go.viam.com/rdk/robot/framesystem"
 	"go.viam.com/rdk/services/motion"
 	"go.viam.com/rdk/services/vision"
@@ -45,6 +46,11 @@ type MultiArmPositionSwitchConfig struct {
 	WriteFilesToCaptureDirectory bool                    `json:"write_files_to_capture_directory,omitempty"`
 	Gantry                       string                  `json:"gantry,omitempty"`
 	GantryPositionsMM            []float64               `json:"gantry_positions_mm,omitempty"`
+	// Direct machine connection fields (bypasses remote proxy — use when gantry is on a separate machine).
+	// When set, the switch dials the gantry machine directly instead of using a resource dependency.
+	GantryMachineAddress string `json:"gantry_machine_address,omitempty"`
+	GantryAPIKeyID       string `json:"gantry_api_key_id,omitempty"`
+	GantryAPIKey         string `json:"gantry_api_key,omitempty"`
 }
 
 func (c *MultiArmPositionSwitchConfig) Validate(path string) ([]string, []string, error) {
@@ -74,12 +80,21 @@ func (c *MultiArmPositionSwitchConfig) Validate(path string) ([]string, []string
 	}
 
 	if c.Gantry != "" {
-		reqDeps = append(reqDeps, gantry.Named(c.Gantry).String())
+		if c.GantryMachineAddress != "" {
+			// Direct connection mode: validate credentials, don't add gantry as a resource dependency.
+			if c.GantryAPIKeyID == "" || c.GantryAPIKey == "" {
+				return nil, nil, errors.New("gantry_api_key_id and gantry_api_key are required when gantry_machine_address is set")
+			}
+		} else {
+			reqDeps = append(reqDeps, gantry.Named(c.Gantry).String())
+		}
 		if len(c.GantryPositionsMM) != len(c.JointsList) {
 			return nil, nil, fmt.Errorf("gantry_positions_mm length (%d) must match joints_list length (%d)", len(c.GantryPositionsMM), len(c.JointsList))
 		}
 	} else if len(c.GantryPositionsMM) > 0 {
 		return nil, nil, errors.New("gantry_positions_mm requires gantry to be set")
+	} else if c.GantryMachineAddress != "" {
+		return nil, nil, errors.New("gantry_machine_address requires gantry to be set")
 	}
 
 	return reqDeps, nil, nil
@@ -124,18 +139,40 @@ func newMultiArmPositionSwitch(ctx context.Context, deps resource.Dependencies, 
 	}
 
 	if newConf.Gantry != "" {
-		maps.gantry, err = gantry.FromProvider(deps, newConf.Gantry)
-		if err != nil {
-			return nil, err
+		if newConf.GantryMachineAddress != "" {
+			// Direct connection: dial the gantry machine instead of using a resource dependency.
+			// This bypasses Viam's remote component proxy and works even when the gantry is on
+			// a separate machine that doesn't reliably proxy its components.
+			gantryRobot, err := vmodutils.ConnectToMachine(context.Background(), logger, newConf.GantryMachineAddress, newConf.GantryAPIKeyID, newConf.GantryAPIKey)
+			if err != nil {
+				return nil, fmt.Errorf("failed to connect to gantry machine at %s: %w", newConf.GantryMachineAddress, err)
+			}
+			maps.gantryClient = gantryRobot
+			maps.gantry, err = gantry.FromRobot(gantryRobot, newConf.Gantry)
+			if err != nil {
+				gantryRobot.Close(context.Background())
+				return nil, fmt.Errorf("failed to get gantry %q from machine: %w", newConf.Gantry, err)
+			}
+		} else {
+			maps.gantry, err = gantry.FromProvider(deps, newConf.Gantry)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
 	return maps, nil
 }
 
+func (maps *MultiArmPositionSwitch) Close(ctx context.Context) error {
+	if maps.gantryClient != nil {
+		return maps.gantryClient.Close(ctx)
+	}
+	return nil
+}
+
 type MultiArmPositionSwitch struct {
 	resource.AlwaysRebuild
-	resource.TriviallyCloseable
 
 	name   resource.Name
 	cfg    *MultiArmPositionSwitchConfig
@@ -143,6 +180,7 @@ type MultiArmPositionSwitch struct {
 
 	arm            arm.Arm
 	gantry         gantry.Gantry
+	gantryClient   robot.Robot // non-nil only in direct machine connection mode
 	motion         motion.Service
 	visionServices []vision.Service
 	fsSvc          framesystem.Service

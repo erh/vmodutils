@@ -46,7 +46,6 @@ type MultiArmPositionSwitchConfig struct {
 	WriteFilesToCaptureDirectory bool                    `json:"write_files_to_capture_directory,omitempty"`
 	Gantry                       string                  `json:"gantry,omitempty"`
 	GantryPositionsMM            []float64               `json:"gantry_positions_mm,omitempty"`
-	GantrySpeedMMPerSec          float64                 `json:"gantry_speed_mm_per_sec,omitempty"`
 	// Direct machine connection fields (bypasses remote proxy — use when gantry is on a separate machine).
 	// When set, the switch dials the gantry machine directly instead of using a resource dependency.
 	GantryMachineAddress string `json:"gantry_machine_address,omitempty"`
@@ -254,8 +253,7 @@ func (maps *MultiArmPositionSwitch) goToPosition(ctx context.Context, position u
 	maps.updatePosition(position)
 
 	if maps.gantry != nil {
-		speeds := []float64{maps.cfg.GantrySpeedMMPerSec}
-		if err := maps.gantry.MoveToPosition(ctx, []float64{maps.cfg.GantryPositionsMM[position]}, speeds, nil); err != nil {
+		if err := maps.gantry.MoveToPosition(ctx, []float64{maps.cfg.GantryPositionsMM[position]}, []float64{}, nil); err != nil {
 			return fmt.Errorf("failed to move gantry to position %d: %w", position, err)
 		}
 	}

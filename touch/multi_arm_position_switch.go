@@ -215,7 +215,7 @@ func (maps *MultiArmPositionSwitch) goToPosition(ctx context.Context, position u
 	maps.updatePosition(position)
 
 	if maps.gantry != nil {
-		if err := maps.gantry.MoveToPosition(ctx, []float64{maps.cfg.GantryPositionsMM[position]}, nil, nil); err != nil {
+		if err := maps.gantry.MoveToPosition(ctx, []float64{maps.cfg.GantryPositionsMM[position]}, []float64{}, nil); err != nil {
 			return fmt.Errorf("failed to move gantry to position %d: %w", position, err)
 		}
 	}

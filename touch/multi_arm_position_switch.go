@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"go.viam.com/rdk/components/arm"
+	"go.viam.com/rdk/components/gantry"
 	toggleswitch "go.viam.com/rdk/components/switch"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/motionplan"
@@ -42,6 +43,8 @@ type MultiArmPositionSwitchConfig struct {
 	Extra                        map[string]any          `json:"extra,omitempty"`
 	Constraints                  *motionplan.Constraints `json:"constraints,omitempty"`
 	WriteFilesToCaptureDirectory bool                    `json:"write_files_to_capture_directory,omitempty"`
+	Gantry                       string                  `json:"gantry,omitempty"`
+	GantryPositionsMM            []float64               `json:"gantry_positions_mm,omitempty"`
 }
 
 func (c *MultiArmPositionSwitchConfig) Validate(path string) ([]string, []string, error) {
@@ -68,6 +71,15 @@ func (c *MultiArmPositionSwitchConfig) Validate(path string) ([]string, []string
 
 	if c.Extra != nil && c.Extra[extraParamsKeyGoalState] != nil {
 		return nil, nil, ErrCannotSpecifyGoalStateInExtra
+	}
+
+	if c.Gantry != "" {
+		reqDeps = append(reqDeps, c.Gantry)
+		if len(c.GantryPositionsMM) != len(c.JointsList) {
+			return nil, nil, fmt.Errorf("gantry_positions_mm length (%d) must match joints_list length (%d)", len(c.GantryPositionsMM), len(c.JointsList))
+		}
+	} else if len(c.GantryPositionsMM) > 0 {
+		return nil, nil, errors.New("gantry_positions_mm requires gantry to be set")
 	}
 
 	return reqDeps, nil, nil
@@ -111,6 +123,13 @@ func newMultiArmPositionSwitch(ctx context.Context, deps resource.Dependencies, 
 		return nil, err
 	}
 
+	if newConf.Gantry != "" {
+		maps.gantry, err = gantry.FromProvider(deps, newConf.Gantry)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return maps, nil
 }
 
@@ -123,6 +142,7 @@ type MultiArmPositionSwitch struct {
 	logger logging.Logger
 
 	arm            arm.Arm
+	gantry         gantry.Gantry
 	motion         motion.Service
 	visionServices []vision.Service
 	fsSvc          framesystem.Service
@@ -193,6 +213,12 @@ func (maps *MultiArmPositionSwitch) goToPosition(ctx context.Context, position u
 	}
 
 	maps.updatePosition(position)
+
+	if maps.gantry != nil {
+		if err := maps.gantry.MoveToPosition(ctx, []float64{maps.cfg.GantryPositionsMM[position]}, nil, nil); err != nil {
+			return fmt.Errorf("failed to move gantry to position %d: %w", position, err)
+		}
+	}
 
 	joints := maps.cfg.JointsList[position]
 

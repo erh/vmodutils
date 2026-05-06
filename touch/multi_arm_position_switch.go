@@ -74,7 +74,7 @@ func (c *MultiArmPositionSwitchConfig) Validate(path string) ([]string, []string
 	}
 
 	if c.Gantry != "" {
-		reqDeps = append(reqDeps, c.Gantry)
+		reqDeps = append(reqDeps, gantry.Named(c.Gantry).String())
 		if len(c.GantryPositionsMM) != len(c.JointsList) {
 			return nil, nil, fmt.Errorf("gantry_positions_mm length (%d) must match joints_list length (%d)", len(c.GantryPositionsMM), len(c.JointsList))
 		}

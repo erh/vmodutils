@@ -26,6 +26,7 @@
     {
         "api": "rdk:component:camera",
         "model": "erh:vmodutils:object-pc-merge",
+        "markdown_link": "README.md#object-pc-merge",
         "short_description": "merges object point clouds from vision services"
     },
 

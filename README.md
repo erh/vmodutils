@@ -79,15 +79,29 @@ Runs a vision service's detector against the source camera, then crops the sourc
 
 ---
 
-## Model: `erh:vmodutils:pc-merge`
+## Model: `erh:vmodutils:object-pc-merge`
 
 **API:** `rdk:component:camera`
 
-Pulls one point cloud from each configured source camera and concatenates them into a single output. No transformation is applied — each source's points are kept in their original frame.
+Calls `GetObjectPointClouds` on a list of vision services, filters by label, and merges the resulting point clouds into one.
 
 ### Configuration
 
 ```json
+{
+  "vision_services" : ["<vision service 1>", "<vision service 2>"],
+  "label" : "<optional label filter>"
+}
+```
+
+| Name      | Type   | Required | Description                                               |
+| --------- | ------ | -------- | --------------------------------------------------------- |
+| `vision_services`     | string list | Yes      | Name of the source vision services that have GetObjectPointClouds. |
+| `service` | string | Yes      | Name of the vision service used for detections.           |
+
+## arm position saver
+```
+>>>>>>> d8b9f50 (meta and README updates)
 {
   "cameras": ["<camera1>", "<camera2>"]
 }

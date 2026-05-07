@@ -30,6 +30,21 @@ func init() {
 type ObjectPCMergeConfig struct {
 	VisionServices []string `json:"vision_services"`
 	Label          string   `json:"label"`
+
+	// Cleaning pipeline. Each stage is skipped when its primary knob is <= 0.
+	// Zero values get the documented defaults applied in newObjectPCMerge so
+	// existing JSON configs pick up cleaning automatically; set a knob to a
+	// negative value to explicitly disable a stage.
+	OutlierMeanK        int     `json:"outlier_mean_k,omitempty"`
+	OutlierStdDevThresh float64 `json:"outlier_std_dev_thresh,omitempty"`
+
+	ClusterMaxDistance         float64 `json:"cluster_max_distance,omitempty"`
+	ClusterMinPointsPerSegment int     `json:"cluster_min_points_per_segment,omitempty"`
+	ClusterMinPointsPerCluster int     `json:"cluster_min_points_per_cluster,omitempty"`
+
+	MaxRadiusFromCenter float64 `json:"max_radius_from_center,omitempty"`
+
+	DisableCleaning bool `json:"disable_cleaning,omitempty"`
 }
 
 func (c *ObjectPCMergeConfig) Validate(path string) ([]string, []string, error) {
@@ -45,6 +60,7 @@ func newObjectPCMerge(ctx context.Context, deps resource.Dependencies, config re
 	if err != nil {
 		return nil, err
 	}
+	fillCleaningDefaults(newConf)
 
 	cc := &ObjectPCMergeCamera{
 		name:     config.ResourceName(),
@@ -137,7 +153,12 @@ func (opc *ObjectPCMergeCamera) NextPointCloud(ctx context.Context, extra map[st
 		}
 	}
 
-	return big, nil
+	cleaned, err := cleanMerged(big, opc.cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return cleaned, nil
 }
 
 func (opc *ObjectPCMergeCamera) Properties(ctx context.Context) (camera.Properties, error) {

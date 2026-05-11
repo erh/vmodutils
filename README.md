@@ -37,19 +37,21 @@ Wraps a source camera and crops its point cloud to an axis-aligned bounding box 
   "max": { "X": 100, "Y": 100, "Z": 100 },
   "good_colors": [
     { "Color": { "R": 255, "G": 0, "B": 0, "A": 255 }, "Distance": 50 }
-  ]
+  ],
+  "transform_back_to_source_frame": false
 }
 ```
 
-| Name          | Type   | Required | Description                                                                                                            |
-| ------------- | ------ | -------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `src`         | string | Yes      | Name of the source camera.                                                                                             |
-| `src_frame`   | string | No       | Frame the source point cloud is in. Defaults to the source camera's name. Points are transformed from this to `world`. |
-| `min`         | vector | No       | Lower-bound `(X, Y, Z)` of the crop box in the world frame.                                                            |
-| `max`         | vector | No       | Upper-bound `(X, Y, Z)` of the crop box in the world frame.                                                            |
-| `good_colors` | array  | No       | RGB color filters. A point is kept only if its color is within `Distance` (Euclidean RGB) of every listed `Color`.     |
+| Name                             | Type   | Required | Description                                                                                                                                                                                                            |
+| -------------------------------- | ------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src`                            | string | Yes      | Name of the source camera.                                                                                                                                                                                             |
+| `src_frame`                      | string | No       | Frame the source point cloud is in. Defaults to the source camera's name. Points are transformed from this to `world`.                                                                                                 |
+| `min`                            | vector | No       | Lower-bound `(X, Y, Z)` of the crop box in the world frame.                                                                                                                                                            |
+| `max`                            | vector | No       | Upper-bound `(X, Y, Z)` of the crop box in the world frame.                                                                                                                                                            |
+| `good_colors`                    | array  | No       | RGB color filters. A point is kept only if its color is within `Distance` (Euclidean RGB) of every listed `Color`.                                                                                                     |
+| `transform_back_to_source_frame` | bool   | No       | If `true`, after cropping in world coordinates the point cloud is transformed back into `src_frame`, and `Properties` forwards the source camera's `IntrinsicParams` / `DistortionParams`. Defaults to `false`.        |
 
-The cropped point cloud is exposed via `NextPointCloud` and as a 2D PNG via `Images`.
+The cropped point cloud is exposed via `NextPointCloud`. `Images` returns the cropped 2D PNG as the first `NamedImage` (named `cropped`), followed by whatever the source camera's `Images` call returns — so downstream consumers expecting the source's `color` / `depth` pair still get them.
 
 ---
 

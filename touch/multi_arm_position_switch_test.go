@@ -3,13 +3,18 @@ package touch
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
 	"testing"
 
+	"github.com/golang/geo/r3"
 	toggleswitch "go.viam.com/rdk/components/switch"
 	"go.viam.com/rdk/logging"
+	"go.viam.com/rdk/referenceframe"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/robot/framesystem"
 	"go.viam.com/rdk/services/motion"
+	"go.viam.com/rdk/spatialmath"
 	"go.viam.com/rdk/testutils/inject"
 	injectMotion "go.viam.com/rdk/testutils/inject/motion"
 	"go.viam.com/rdk/vision"
@@ -127,6 +132,9 @@ func TestMultiArmPositionSwitchSetPositionAndGetPosition(t *testing.T) {
 		}
 
 		fakeFsSvc := inject.NewFrameSystemService(framesystem.PublicServiceName.Name)
+		fakeFsSvc.FrameSystemConfigFunc = func(ctx context.Context) (*framesystem.Config, error) {
+			return mustTestFSConfigArm3DOF(t), nil
+		}
 
 		allDeps := resource.Dependencies{
 			fakeArm.Name():     fakeArm,
@@ -213,6 +221,9 @@ func TestMultiArmPositionSwitchSetPositionAndGetPosition(t *testing.T) {
 		}
 
 		fakeFsSvc := inject.NewFrameSystemService(framesystem.PublicServiceName.Name)
+		fakeFsSvc.FrameSystemConfigFunc = func(ctx context.Context) (*framesystem.Config, error) {
+			return mustTestFSConfigArm3DOF(t), nil
+		}
 
 		allDeps := resource.Dependencies{
 			fakeArm.Name():   fakeArm,
@@ -269,4 +280,142 @@ func TestMultiArmPositionSwitchSetPositionAndGetPosition(t *testing.T) {
 		test.That(t, err, test.ShouldBeNil)
 		test.That(t, position, test.ShouldEqual, 0)
 	})
+}
+
+func mustTestFSConfigArm3DOF(t *testing.T) *framesystem.Config {
+	t.Helper()
+	internal := referenceframe.NewEmptyFrameSystem("internal")
+	var parent referenceframe.Frame = internal.World()
+	var last string
+	for i := 0; i < 3; i++ {
+		nm := fmt.Sprintf("j%d", i)
+		j, err := referenceframe.NewRotationalFrame(
+			nm,
+			spatialmath.R4AA{RX: 1},
+			referenceframe.Limit{Min: -math.Pi, Max: math.Pi},
+		)
+		test.That(t, err, test.ShouldBeNil)
+		test.That(t, internal.AddFrame(j, parent), test.ShouldBeNil)
+		parent = j
+		last = nm
+	}
+	m, err := referenceframe.NewModel("arm", internal, last)
+	test.That(t, err, test.ShouldBeNil)
+	lif := referenceframe.NewLinkInFrame(referenceframe.World, spatialmath.NewZeroPose(), "arm", nil)
+	return &framesystem.Config{Parts: []*referenceframe.FrameSystemPart{{FrameConfig: lif, ModelFrame: m}}}
+}
+
+func mustTestFSConfigArmUnderGantry(t *testing.T) *framesystem.Config {
+	t.Helper()
+	gInternal := referenceframe.NewEmptyFrameSystem("g")
+	gf, err := referenceframe.NewTranslationalFrame(
+		"axis",
+		r3.Vector{X: 1},
+		referenceframe.Limit{Min: 0, Max: 2},
+	)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, gInternal.AddFrame(gf, gInternal.World()), test.ShouldBeNil)
+	gantryModel, err := referenceframe.NewModel("gantry", gInternal, "axis")
+	test.That(t, err, test.ShouldBeNil)
+	gantryLink := referenceframe.NewLinkInFrame(referenceframe.World, spatialmath.NewZeroPose(), "gantry", nil)
+
+	internal := referenceframe.NewEmptyFrameSystem("internal")
+	var parent referenceframe.Frame = internal.World()
+	var last string
+	for i := 0; i < 2; i++ {
+		nm := fmt.Sprintf("j%d", i)
+		j, err := referenceframe.NewRotationalFrame(
+			nm,
+			spatialmath.R4AA{RX: 1},
+			referenceframe.Limit{Min: -math.Pi, Max: math.Pi},
+		)
+		test.That(t, err, test.ShouldBeNil)
+		test.That(t, internal.AddFrame(j, parent), test.ShouldBeNil)
+		parent = j
+		last = nm
+	}
+	armModel, err := referenceframe.NewModel("arm", internal, last)
+	test.That(t, err, test.ShouldBeNil)
+	armLink := referenceframe.NewLinkInFrame("gantry", spatialmath.NewZeroPose(), "arm", nil)
+
+	return &framesystem.Config{Parts: []*referenceframe.FrameSystemPart{
+		{FrameConfig: gantryLink, ModelFrame: gantryModel},
+		{FrameConfig: armLink, ModelFrame: armModel},
+	}}
+}
+
+func TestMovableAncestors(t *testing.T) {
+	t.Run("arm only (3 DoF model)", func(t *testing.T) {
+		cfg := mustTestFSConfigArm3DOF(t)
+		fs, err := referenceframe.NewFrameSystem(framesystem.LocalFrameSystemName, cfg.Parts, nil)
+		test.That(t, err, test.ShouldBeNil)
+
+		chain, err := movableAncestors(fs, "arm")
+		test.That(t, err, test.ShouldBeNil)
+		test.That(t, len(chain), test.ShouldEqual, 1)
+		test.That(t, chain[0].Name(), test.ShouldEqual, "arm")
+		test.That(t, len(chain[0].DoF()), test.ShouldEqual, 3)
+	})
+
+	t.Run("gantry + arm", func(t *testing.T) {
+		cfg := mustTestFSConfigArmUnderGantry(t)
+		fs, err := referenceframe.NewFrameSystem(framesystem.LocalFrameSystemName, cfg.Parts, nil)
+		test.That(t, err, test.ShouldBeNil)
+
+		chain, err := movableAncestors(fs, "arm")
+		test.That(t, err, test.ShouldBeNil)
+		test.That(t, len(chain), test.ShouldEqual, 2)
+		test.That(t, chain[0].Name(), test.ShouldEqual, "arm")
+		test.That(t, chain[1].Name(), test.ShouldEqual, "gantry")
+	})
+
+	t.Run("static ancestor skipped (table has 0 DoF)", func(t *testing.T) {
+		table := referenceframe.NewLinkInFrame(referenceframe.World, spatialmath.NewZeroPose(), "table", nil)
+		base := mustTestFSConfigArmUnderGantry(t)
+		gantryPart := base.Parts[0]
+		gantryPart.FrameConfig = referenceframe.NewLinkInFrame("table", spatialmath.NewZeroPose(), "gantry", nil)
+		parts := []*referenceframe.FrameSystemPart{
+			{FrameConfig: table, ModelFrame: nil},
+			gantryPart,
+			base.Parts[1],
+		}
+		fs, err := referenceframe.NewFrameSystem(framesystem.LocalFrameSystemName, parts, nil)
+		test.That(t, err, test.ShouldBeNil)
+
+		chain, err := movableAncestors(fs, "arm")
+		test.That(t, err, test.ShouldBeNil)
+		test.That(t, len(chain), test.ShouldEqual, 2)
+		test.That(t, chain[1].Name(), test.ShouldEqual, "gantry")
+	})
+}
+
+func TestFlatJointsToGoalInputs(t *testing.T) {
+	cfg := mustTestFSConfigArmUnderGantry(t)
+	fs, err := referenceframe.NewFrameSystem(framesystem.LocalFrameSystemName, cfg.Parts, nil)
+	test.That(t, err, test.ShouldBeNil)
+	chain, err := movableAncestors(fs, "arm")
+	test.That(t, err, test.ShouldBeNil)
+
+	got, err := flatJointsToGoalInputs([]float64{1, 2, 3}, chain)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, len(got), test.ShouldEqual, 2)
+	test.That(t, []float64(got["arm"]), test.ShouldResemble, []float64{1, 2})
+	test.That(t, []float64(got["gantry"]), test.ShouldResemble, []float64{3})
+
+	_, err = flatJointsToGoalInputs([]float64{1, 2}, chain)
+	test.That(t, err, test.ShouldNotBeNil)
+}
+
+func TestMultiArmPositionSwitchValidateUniformLength(t *testing.T) {
+	path := "components.0"
+	cfg := &MultiArmPositionSwitchConfig{
+		Arm: "arm",
+		JointsList: [][]float64{
+			{0, 0, 0},
+			{1, 1},
+		},
+	}
+	_, _, err := cfg.Validate(path)
+	test.That(t, err, test.ShouldNotBeNil)
+	test.That(t, err.Error(), test.ShouldContainSubstring, "same inner length")
 }

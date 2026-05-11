@@ -359,7 +359,7 @@ func buildWorldStateWithObstacles(ctx context.Context, visionSvcs []vision.Servi
 
 func goToPositionUsingJointToJointMotion(
 	ctx context.Context,
-	joints []float64,
+	goalFrameSystemInputs referenceframe.FrameSystemInputs,
 	armName string,
 	motionSvc motion.Service,
 	visionSvcs []vision.Service,
@@ -375,10 +375,6 @@ func goToPositionUsingJointToJointMotion(
 	if err != nil {
 		return err
 	}
-
-	// Express the goal state in joint positions
-	goalFrameSystemInputs := make(referenceframe.FrameSystemInputs)
-	goalFrameSystemInputs[armName] = joints
 	if extra == nil {
 		extra = make(map[string]any)
 	} else if extra[extraParamsKeyGoalState] != nil {
@@ -477,6 +473,14 @@ func serialize(inputs referenceframe.FrameSystemInputs) map[string]any {
 	}
 	m["configuration"] = confMap
 	return m
+}
+
+func floatsToInputs(j []float64) []referenceframe.Input {
+	out := make([]referenceframe.Input, len(j))
+	for i, v := range j {
+		out[i] = v
+	}
+	return out
 }
 
 func GetMergedPointCloudFromMultiPositionSwitch(ctx context.Context, s toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service, writeFilesToCaptureDirectory bool) (pointcloud.PointCloud, error) {

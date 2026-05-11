@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,6 +13,7 @@ import (
 	toggleswitch "go.viam.com/rdk/components/switch"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/motionplan"
+	"go.viam.com/rdk/referenceframe"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/robot/framesystem"
 	"go.viam.com/rdk/services/motion"
@@ -66,6 +68,16 @@ func (c *MultiArmPositionSwitchConfig) Validate(path string) ([]string, []string
 		return nil, nil, ErrMustSpecifyAtLeastOneJointPosition
 	}
 
+	firstLen := len(c.JointsList[0])
+	for i := 1; i < len(c.JointsList); i++ {
+		if len(c.JointsList[i]) != firstLen {
+			return nil, nil, fmt.Errorf(
+				"joints_list entries must all have the same inner length; entry 0 has length %d but entry %d has length %d",
+				firstLen, i, len(c.JointsList[i]),
+			)
+		}
+	}
+
 	if c.Extra != nil && c.Extra[extraParamsKeyGoalState] != nil {
 		return nil, nil, ErrCannotSpecifyGoalStateInExtra
 	}
@@ -111,6 +123,35 @@ func newMultiArmPositionSwitch(ctx context.Context, deps resource.Dependencies, 
 		return nil, err
 	}
 
+	fs, err := framesystem.NewFromService(ctx, maps.fsSvc, nil)
+	if err != nil {
+		return nil, fmt.Errorf("multi-arm-position-switch: building frame system: %w", err)
+	}
+	maps.inputChain, err = movableAncestors(fs, arm.Name().Name)
+	if err != nil {
+		return nil, err
+	}
+
+	dofMappingSummary := formatDoFMapping(maps.inputChain)
+
+	maps.logger.Infof("multi-arm-position-switch joint chain (arm first, toward world): %s",
+		dofMappingSummary)
+
+	wantLen := totalDoF(maps.inputChain)
+	for i, row := range newConf.JointsList {
+		if len(row) != wantLen {
+			return nil, fmt.Errorf("joints_list[%d]: length is %d but expected %d (%s)",
+				i, len(row), wantLen, dofMappingSummary)
+		}
+	}
+	if newConf.Motion == "" && len(maps.inputChain) > 1 {
+		return nil, fmt.Errorf(
+			"multi-arm-position-switch: motion service is required when the arm has input-enabled ancestors (%s); "+
+				"configure \"motion\" or use MoveToJointPositions only with an arm-only frame chain",
+			dofMappingSummary,
+		)
+	}
+
 	return maps, nil
 }
 
@@ -126,6 +167,7 @@ type MultiArmPositionSwitch struct {
 	motion         motion.Service
 	visionServices []vision.Service
 	fsSvc          framesystem.Service
+	inputChain     []referenceframe.Frame
 
 	// 'mu' protects access to 'position'
 	mu       sync.Mutex
@@ -212,7 +254,11 @@ func (maps *MultiArmPositionSwitch) goToPosition(ctx context.Context, position u
 
 	var moveErr error
 	if maps.motion != nil {
-		moveErr = goToPositionUsingJointToJointMotion(ctx, joints, maps.arm.Name().Name, maps.motion, maps.visionServices, maps.cfg.Extra, maps.cfg.Constraints, maps.logger)
+		goalInputs, err := flatJointsToGoalInputs(joints, maps.inputChain)
+		if err != nil {
+			return err
+		}
+		moveErr = goToPositionUsingJointToJointMotion(ctx, goalInputs, maps.arm.Name().Name, maps.motion, maps.visionServices, maps.cfg.Extra, maps.cfg.Constraints, maps.logger)
 	} else {
 		moveErr = goToPositionUsingMoveToJointPositions(ctx, joints, maps.arm, maps.cfg.Extra, maps.logger)
 	}
@@ -230,4 +276,72 @@ func (maps *MultiArmPositionSwitch) goToPosition(ctx context.Context, position u
 	}
 
 	return moveErr
+}
+
+func movableAncestors(fs *referenceframe.FrameSystem, armFrameName string) ([]referenceframe.Frame, error) {
+	armFrame := fs.Frame(armFrameName)
+	if armFrame == nil {
+		return nil, fmt.Errorf(
+			"multi-arm-position-switch: arm %q is not in the frame system; check the arm's name matches the frame system",
+			armFrameName,
+		)
+	}
+	path, err := fs.TracebackFrame(armFrame)
+	if err != nil {
+		return nil, fmt.Errorf("multi-arm-position-switch: tracing frame %q toward world: %w", armFrameName, err)
+	}
+
+	var chain []referenceframe.Frame
+	for _, fr := range path {
+		if fr.Name() == referenceframe.World {
+			continue
+		}
+		if len(fr.DoF()) > 0 {
+			chain = append(chain, fr)
+		}
+	}
+	return chain, nil
+}
+
+func totalDoF(frames []referenceframe.Frame) int {
+	n := 0
+	for _, fr := range frames {
+		n += len(fr.DoF())
+	}
+	return n
+}
+
+func formatDoFMapping(frames []referenceframe.Frame) string {
+	var b strings.Builder
+	offset := 0
+	for i, fr := range frames {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		dof := len(fr.DoF())
+		if dof == 1 {
+			fmt.Fprintf(&b, "%s[%d]", fr.Name(), offset)
+		} else {
+			fmt.Fprintf(&b, "%s[%d:%d]", fr.Name(), offset, offset+dof)
+		}
+		offset += dof
+	}
+	return b.String()
+}
+
+func flatJointsToGoalInputs(joints []float64, chain []referenceframe.Frame) (referenceframe.FrameSystemInputs, error) {
+	want := totalDoF(chain)
+	if len(joints) != want {
+		return nil, fmt.Errorf("internal error: got %d joint values for %d expected (mapping: %s)",
+			len(joints), want, formatDoFMapping(chain))
+	}
+	out := make(referenceframe.FrameSystemInputs)
+	off := 0
+	for _, fr := range chain {
+		d := len(fr.DoF())
+		slice := joints[off : off+d]
+		out[fr.Name()] = floatsToInputs(slice)
+		off += d
+	}
+	return out, nil
 }

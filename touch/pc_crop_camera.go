@@ -39,6 +39,7 @@ type CropCameraConfig struct {
 	GoodColors []ColorFilter `json:"good_colors"`
 
 	TransformBackToSourceFrame bool `json:"transform_back_to_source_frame"`
+	ForwardSourceImages        bool `json:"forward_source_images"`
 }
 
 func (ccc *CropCameraConfig) Validate(path string) ([]string, []string, error) {
@@ -112,6 +113,10 @@ func (cc *cropCamera) Images(ctx context.Context, filterSourceNames []string, ex
 	ni, err := camera.NamedImageFromImage(img, "cropped", "image/png", data.Annotations{})
 	if err != nil {
 		return nil, resource.ResponseMetadata{}, err
+	}
+
+	if !cc.cfg.ForwardSourceImages {
+		return []camera.NamedImage{ni}, resource.ResponseMetadata{time.Now()}, nil
 	}
 
 	srcImgs, srcMeta, err := cc.src.Images(ctx, filterSourceNames, extra)

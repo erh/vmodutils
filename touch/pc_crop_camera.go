@@ -37,6 +37,9 @@ type CropCameraConfig struct {
 	Max      r3.Vector
 
 	GoodColors []ColorFilter `json:"good_colors"`
+
+	TransformBackToSourceFrame bool `json:"transform_back_to_source_frame"`
+	ForwardSourceImages        bool `json:"forward_source_images"`
 }
 
 func (ccc *CropCameraConfig) Validate(path string) ([]string, []string, error) {
@@ -111,7 +114,17 @@ func (cc *cropCamera) Images(ctx context.Context, filterSourceNames []string, ex
 	if err != nil {
 		return nil, resource.ResponseMetadata{}, err
 	}
-	return []camera.NamedImage{ni}, resource.ResponseMetadata{time.Now()}, nil
+
+	if !cc.cfg.ForwardSourceImages {
+		return []camera.NamedImage{ni}, resource.ResponseMetadata{time.Now()}, nil
+	}
+
+	srcImgs, srcMeta, err := cc.src.Images(ctx, filterSourceNames, extra)
+	if err != nil {
+		return nil, resource.ResponseMetadata{}, err
+	}
+
+	return append([]camera.NamedImage{ni}, srcImgs...), srcMeta, nil
 }
 
 func (cc *cropCamera) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
@@ -190,16 +203,34 @@ func (cc *cropCamera) doNextPointCloud(ctx context.Context, extra map[string]int
 	pc = PCCropWithColor(pc, cc.cfg.Min, cc.cfg.Max, cc.cfg.GoodColors)
 	timeC := time.Since(start)
 
-	cc.logger.Debugf("cropCamera::NextPointCloud timeA: %v timeB: %v timeC: %v", timeA, timeB, timeC)
+	if cc.cfg.TransformBackToSourceFrame {
+		pc, err = cc.client.TransformPointCloud(ctx, pc, "world", srcFrame)
+		if err != nil {
+			return nil, err
+		}
+	}
+	timeD := time.Since(start)
+
+	cc.logger.Debugf("cropCamera::NextPointCloud timeA: %v timeB: %v timeC: %v timeD: %v", timeA, timeB, timeC, timeD)
 
 	return pc, nil
 
 }
 
 func (cc *cropCamera) Properties(ctx context.Context) (camera.Properties, error) {
-	return camera.Properties{
+	props := camera.Properties{
 		SupportsPCD: true,
-	}, nil
+	}
+	if !cc.cfg.TransformBackToSourceFrame {
+		return props, nil
+	}
+	srcProps, err := cc.src.Properties(ctx)
+	if err != nil {
+		return props, err
+	}
+	props.IntrinsicParams = srcProps.IntrinsicParams
+	props.DistortionParams = srcProps.DistortionParams
+	return props, nil
 }
 
 func (cc *cropCamera) Close(ctx context.Context) error {

@@ -3,7 +3,6 @@ package touch
 import (
 	"context"
 	"fmt"
-	"image"
 	"math"
 
 	"github.com/golang/geo/r3"
@@ -205,7 +204,7 @@ func (cs *ClusterService) DetectionsFromCamera(ctx context.Context, cameraName s
 	return nil, fmt.Errorf("n/a")
 }
 
-func (cs *ClusterService) Detections(ctx context.Context, img image.Image, extra map[string]interface{}) ([]objectdetection.Detection, error) {
+func (cs *ClusterService) Detections(ctx context.Context, img *camera.NamedImage, extra map[string]interface{}) ([]objectdetection.Detection, error) {
 	return nil, fmt.Errorf("n/a")
 }
 
@@ -220,7 +219,7 @@ func (cs *ClusterService) ClassificationsFromCamera(
 
 func (cs *ClusterService) Classifications(
 	ctx context.Context,
-	img image.Image,
+	img *camera.NamedImage,
 	n int,
 	extra map[string]interface{},
 ) (classification.Classifications, error) {

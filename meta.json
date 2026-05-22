@@ -23,6 +23,12 @@
         "markdown_link": "README.md#model-erhvmodutilspc-merge",
         "short_description": "merges pointclouds"
     },
+    {
+        "api": "rdk:component:camera",
+        "model": "erh:vmodutils:merge-all-objects-pointclouds",
+        "markdown_link": "README.md#model-erhvmodutilsmerge-all-objects-pointclouds",
+        "short_description": "merges object point clouds from vision services"
+    },
 
     {
         "api": "rdk:component:camera",

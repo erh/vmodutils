@@ -79,11 +79,50 @@ Runs a vision service's detector against the source camera, then crops the sourc
 
 ---
 
+## Model: `erh:vmodutils:merge-all-objects-pointclouds`
+
+**API:** `rdk:component:camera`
+
+Calls `GetObjectPointClouds` on a list of vision services, optionally filters by label, merges the resulting per-object point clouds into one, and runs an opt-out cleaning pipeline (statistical outlier removal → largest connected component → radius crop) to drop ground-plane halo and stray noise. Exposes the cleaned cloud via `NextPointCloud` and a 2D projection via `Images`.
+
+### Configuration
+
+```json
+{
+  "vision_services": ["<vision service 1>", "<vision service 2>"],
+  "label": "<optional label filter>",
+
+  "outlier_mean_k": 50,
+  "outlier_std_dev_thresh": 2.0,
+  "cluster_max_distance": 10,
+  "cluster_min_points_per_segment": 5,
+  "cluster_min_points_per_cluster": 50,
+  "max_radius_from_center": 250,
+  "disable_cleaning": false
+}
+```
+
+| Name | Type | Required | Default | Description |
+| ---- | ---- | -------- | ------- | ----------- |
+| `vision_services` | string list | Yes | — | Source vision services. Each must implement `GetObjectPointClouds`. |
+| `label` | string | No | "" | If set, only objects whose `Geometry.Label()` equals this string are merged. |
+| `outlier_mean_k` | int | No | 50 | `meanK` for the statistical outlier filter. Set `<= 0` to disable this stage. |
+| `outlier_std_dev_thresh` | float | No | 2.0 | StdDev multiplier for the outlier filter — points whose mean kNN distance exceeds `mean + this * stddev` are dropped. |
+| `cluster_max_distance` | float (mm) | No | 10 | Voxel cell size for the largest-connected-component step. Two voxels with `>= cluster_min_points_per_segment` points are connected if they are 26-grid-neighbors. Set `<= 0` to disable this stage. |
+| `cluster_min_points_per_segment` | int | No | 5 | Voxels with fewer points are dropped before connectivity, so sparse noise can't bridge clusters. |
+| `cluster_min_points_per_cluster` | int | No | 50 | Minimum size of the largest component. If no component meets this, the input is passed through unchanged (avoids returning an empty cloud for sparse-but-valid scenes). |
+| `max_radius_from_center` | float (mm) | No | 250 | Final radius crop around the centroid of the surviving cloud. Set `<= 0` to disable this stage. |
+| `disable_cleaning` | bool | No | false | If `true`, bypass all three cleaning stages and return the raw merged cloud. |
+
+Defaults are tuned conservatively for cup/bottle-sized objects on a tabletop. Set any numeric knob to a negative value (e.g. `-1`) to explicitly disable that stage; setting it to `0` re-applies the default.
+
+---
+
 ## Model: `erh:vmodutils:pc-merge`
 
 **API:** `rdk:component:camera`
 
-Pulls one point cloud from each configured source camera and concatenates them into a single output. No transformation is applied — each source's points are kept in their original frame.
+Wraps a list of source cameras, calls `NextPointCloud` on each, and returns the union as a single point cloud. No cleaning or transformation is applied — points are emitted in whatever frame each source camera publishes them in. Exposes the merged cloud via `NextPointCloud` and a 2D projection via `Images`.
 
 ### Configuration
 
@@ -93,9 +132,9 @@ Pulls one point cloud from each configured source camera and concatenates them i
 }
 ```
 
-| Name      | Type     | Required | Description                                                 |
-| --------- | -------- | -------- | ----------------------------------------------------------- |
-| `cameras` | string[] | Yes      | One or more source camera names. Must contain at least one. |
+| Name      | Type        | Required | Description                                                 |
+| --------- | ----------- | -------- | ----------------------------------------------------------- |
+| `cameras` | string list | Yes      | One or more source camera names. Must contain at least one. |
 
 ---
 

@@ -79,7 +79,7 @@ Runs a vision service's detector against the source camera, then crops the sourc
 
 ---
 
-## Model: `erh:vmodutils:object-pc-merge`
+## Model: `erh:vmodutils:merge-all-objects-pointclouds`
 
 **API:** `rdk:component:camera`
 

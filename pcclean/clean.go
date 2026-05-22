@@ -1,4 +1,9 @@
-package touch
+// Package pcclean cleans a merged point cloud through an opt-out pipeline of
+// statistical outlier removal, largest-connected-component selection, and a
+// centroid radius crop. It is consumed by camera components that union many
+// noisy point clouds and want to drop the wide ground halo and stray flyers
+// before publishing.
+package pcclean
 
 import (
 	"math"
@@ -9,35 +14,54 @@ import (
 )
 
 const (
-	defaultOutlierMeanK               = 50
-	defaultOutlierStdDevThresh        = 2.0
-	defaultClusterMaxDistance         = 10.0
-	defaultClusterMinPointsPerSegment = 5
-	defaultClusterMinPointsPerCluster = 50
-	defaultMaxRadiusFromCenter        = 250.0
+	DefaultOutlierMeanK               = 50
+	DefaultOutlierStdDevThresh        = 2.0
+	DefaultClusterMaxDistance         = 10.0
+	DefaultClusterMinPointsPerSegment = 5
+	DefaultClusterMinPointsPerCluster = 50
+	DefaultMaxRadiusFromCenter        = 250.0
 )
 
-// fillCleaningDefaults rewrites zero-valued cleaning knobs to the conservative
+// Config holds the knobs for the cleaning pipeline. Each stage is skipped
+// when its primary knob is <= 0. Zero values get the documented defaults
+// applied by FillDefaults so existing configs pick up cleaning automatically;
+// set a knob to a negative value to explicitly disable a stage. JSON tags are
+// flat so this struct can be anonymously embedded in a component config and
+// its keys promoted to the outer JSON namespace.
+type Config struct {
+	OutlierMeanK        int     `json:"outlier_mean_k,omitempty"`
+	OutlierStdDevThresh float64 `json:"outlier_std_dev_thresh,omitempty"`
+
+	ClusterMaxDistance         float64 `json:"cluster_max_distance,omitempty"`
+	ClusterMinPointsPerSegment int     `json:"cluster_min_points_per_segment,omitempty"`
+	ClusterMinPointsPerCluster int     `json:"cluster_min_points_per_cluster,omitempty"`
+
+	MaxRadiusFromCenter float64 `json:"max_radius_from_center,omitempty"`
+
+	Disable bool `json:"disable_cleaning,omitempty"`
+}
+
+// FillDefaults rewrites zero-valued cleaning knobs to the conservative
 // defaults. A negative value is preserved so a user can explicitly disable a
 // stage without it being silently re-enabled by the default-fill.
-func fillCleaningDefaults(c *ObjectPCMergeConfig) {
+func FillDefaults(c *Config) {
 	if c.OutlierMeanK == 0 {
-		c.OutlierMeanK = defaultOutlierMeanK
+		c.OutlierMeanK = DefaultOutlierMeanK
 	}
 	if c.OutlierStdDevThresh == 0 {
-		c.OutlierStdDevThresh = defaultOutlierStdDevThresh
+		c.OutlierStdDevThresh = DefaultOutlierStdDevThresh
 	}
 	if c.ClusterMaxDistance == 0 {
-		c.ClusterMaxDistance = defaultClusterMaxDistance
+		c.ClusterMaxDistance = DefaultClusterMaxDistance
 	}
 	if c.ClusterMinPointsPerSegment == 0 {
-		c.ClusterMinPointsPerSegment = defaultClusterMinPointsPerSegment
+		c.ClusterMinPointsPerSegment = DefaultClusterMinPointsPerSegment
 	}
 	if c.ClusterMinPointsPerCluster == 0 {
-		c.ClusterMinPointsPerCluster = defaultClusterMinPointsPerCluster
+		c.ClusterMinPointsPerCluster = DefaultClusterMinPointsPerCluster
 	}
 	if c.MaxRadiusFromCenter == 0 {
-		c.MaxRadiusFromCenter = defaultMaxRadiusFromCenter
+		c.MaxRadiusFromCenter = DefaultMaxRadiusFromCenter
 	}
 }
 
@@ -234,11 +258,11 @@ func cropToRadius(in pointcloud.PointCloud, radius float64) (pointcloud.PointClo
 	return out, nil
 }
 
-// cleanMerged runs the full cleaning pipeline on a merged cloud: outlier
-// removal, then largest-cluster keep, then radius crop. Each stage is
-// individually bypassable via its config knob.
-func cleanMerged(pc pointcloud.PointCloud, cfg *ObjectPCMergeConfig) (pointcloud.PointCloud, error) {
-	if cfg.DisableCleaning || pc == nil || pc.Size() == 0 {
+// Clean runs the full cleaning pipeline on a merged cloud: outlier removal,
+// then largest-cluster keep, then radius crop. Each stage is individually
+// bypassable via its config knob.
+func Clean(pc pointcloud.PointCloud, cfg *Config) (pointcloud.PointCloud, error) {
+	if cfg.Disable || pc == nil || pc.Size() == 0 {
 		return pc, nil
 	}
 

@@ -1,4 +1,4 @@
-package touch
+package pcclean
 
 import (
 	"math"
@@ -83,30 +83,30 @@ func nonEmptyTotal(pc pointcloud.PointCloud) int {
 	return pc.Size()
 }
 
-func TestFillCleaningDefaults(t *testing.T) {
+func TestFillDefaults(t *testing.T) {
 	t.Run("zero values get defaults", func(t *testing.T) {
-		c := &ObjectPCMergeConfig{}
-		fillCleaningDefaults(c)
-		test.That(t, c.OutlierMeanK, test.ShouldEqual, defaultOutlierMeanK)
-		test.That(t, c.OutlierStdDevThresh, test.ShouldEqual, defaultOutlierStdDevThresh)
-		test.That(t, c.ClusterMaxDistance, test.ShouldEqual, defaultClusterMaxDistance)
-		test.That(t, c.ClusterMinPointsPerSegment, test.ShouldEqual, defaultClusterMinPointsPerSegment)
-		test.That(t, c.ClusterMinPointsPerCluster, test.ShouldEqual, defaultClusterMinPointsPerCluster)
-		test.That(t, c.MaxRadiusFromCenter, test.ShouldEqual, defaultMaxRadiusFromCenter)
+		c := &Config{}
+		FillDefaults(c)
+		test.That(t, c.OutlierMeanK, test.ShouldEqual, DefaultOutlierMeanK)
+		test.That(t, c.OutlierStdDevThresh, test.ShouldEqual, DefaultOutlierStdDevThresh)
+		test.That(t, c.ClusterMaxDistance, test.ShouldEqual, DefaultClusterMaxDistance)
+		test.That(t, c.ClusterMinPointsPerSegment, test.ShouldEqual, DefaultClusterMinPointsPerSegment)
+		test.That(t, c.ClusterMinPointsPerCluster, test.ShouldEqual, DefaultClusterMinPointsPerCluster)
+		test.That(t, c.MaxRadiusFromCenter, test.ShouldEqual, DefaultMaxRadiusFromCenter)
 	})
 
 	t.Run("negative values are preserved", func(t *testing.T) {
-		c := &ObjectPCMergeConfig{
+		c := &Config{
 			OutlierMeanK:        -1,
 			ClusterMaxDistance:  -1,
 			MaxRadiusFromCenter: -1,
 		}
-		fillCleaningDefaults(c)
+		FillDefaults(c)
 		test.That(t, c.OutlierMeanK, test.ShouldEqual, -1)
 		test.That(t, c.ClusterMaxDistance, test.ShouldEqual, -1.0)
 		test.That(t, c.MaxRadiusFromCenter, test.ShouldEqual, -1.0)
 		// Untouched zero fields still get their defaults.
-		test.That(t, c.OutlierStdDevThresh, test.ShouldEqual, defaultOutlierStdDevThresh)
+		test.That(t, c.OutlierStdDevThresh, test.ShouldEqual, DefaultOutlierStdDevThresh)
 	})
 }
 
@@ -206,17 +206,17 @@ func TestCropToRadius(t *testing.T) {
 	})
 }
 
-func TestCleanMergedFullPipeline(t *testing.T) {
+func TestCleanFullPipeline(t *testing.T) {
 	// Build the scene from the real picture: a dense object cluster, a wide
 	// horizontal table-plane halo, and a small far-away blob.
 	object := makeSphereCluster(1, 600, r3.Vector{X: 0, Y: 0, Z: 0}, 25)
 	addSlab(object, 2, 200, r3.Vector{X: 600, Y: 0, Z: 0}, 800, 1)
 	addBlob(object, 3, 10, r3.Vector{X: 4000, Y: 4000, Z: 0}, 5)
 
-	cfg := &ObjectPCMergeConfig{}
-	fillCleaningDefaults(cfg)
+	cfg := &Config{}
+	FillDefaults(cfg)
 
-	out, err := cleanMerged(object, cfg)
+	out, err := Clean(object, cfg)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, out.Size(), test.ShouldBeGreaterThan, 0)
 	test.That(t, out.Size(), test.ShouldBeLessThan, object.Size())
@@ -228,23 +228,23 @@ func TestCleanMergedFullPipeline(t *testing.T) {
 	})
 }
 
-func TestCleanMergedDisable(t *testing.T) {
+func TestCleanDisable(t *testing.T) {
 	pc := makeSphereCluster(1, 100, r3.Vector{}, 10)
 	addBlob(pc, 2, 20, r3.Vector{X: 5000}, 5)
 
-	cfg := &ObjectPCMergeConfig{DisableCleaning: true}
-	fillCleaningDefaults(cfg)
+	cfg := &Config{Disable: true}
+	FillDefaults(cfg)
 
-	out, err := cleanMerged(pc, cfg)
+	out, err := Clean(pc, cfg)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, nonEmptyTotal(out), test.ShouldEqual, pc.Size())
 }
 
-func TestCleanMergedEmpty(t *testing.T) {
-	cfg := &ObjectPCMergeConfig{}
-	fillCleaningDefaults(cfg)
+func TestCleanEmpty(t *testing.T) {
+	cfg := &Config{}
+	FillDefaults(cfg)
 	empty := pointcloud.NewBasicEmpty()
-	out, err := cleanMerged(empty, cfg)
+	out, err := Clean(empty, cfg)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, out.Size(), test.ShouldEqual, 0)
 }
@@ -261,42 +261,11 @@ func noisySAM2Like() pointcloud.PointCloud {
 	return pc
 }
 
-// keepLargestClusterViaSlowCluster is the pre-optimization implementation,
-// kept here for benchmarking only — confirms that the new grid+UF path is
-// dramatically faster on realistic inputs.
-func keepLargestClusterViaSlowCluster(in pointcloud.PointCloud, maxDistance float64, minPointsPerSegment, minPointsPerCluster int) (pointcloud.PointCloud, error) {
-	clusters, err := Cluster(in, maxDistance, minPointsPerSegment, minPointsPerCluster)
-	if err != nil {
-		return nil, err
-	}
-	if len(clusters) == 0 {
-		return in, nil
-	}
-	largest := clusters[0]
-	for _, c := range clusters[1:] {
-		if c.Size() > largest.Size() {
-			largest = c
-		}
-	}
-	return largest, nil
-}
-
 func BenchmarkKeepLargestCluster_Fast(b *testing.B) {
 	pc := noisySAM2Like()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := keepLargestCluster(pc, defaultClusterMaxDistance, defaultClusterMinPointsPerSegment, defaultClusterMinPointsPerCluster)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkKeepLargestCluster_Slow(b *testing.B) {
-	pc := noisySAM2Like()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := keepLargestClusterViaSlowCluster(pc, defaultClusterMaxDistance, defaultClusterMinPointsPerSegment, defaultClusterMinPointsPerCluster)
+		_, err := keepLargestCluster(pc, DefaultClusterMaxDistance, DefaultClusterMinPointsPerSegment, DefaultClusterMinPointsPerCluster)
 		if err != nil {
 			b.Fatal(err)
 		}

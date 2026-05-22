@@ -14,40 +14,28 @@ import (
 	"go.viam.com/rdk/spatialmath"
 
 	"github.com/erh/vmodutils"
+	"github.com/erh/vmodutils/pcclean"
 )
 
-var ObjectPCMergeModel = vmodutils.NamespaceFamily.WithModel("object-pc-merge")
+var MergeAllObjectsModel = vmodutils.NamespaceFamily.WithModel("merge-all-objects-pointclouds")
 
 func init() {
 	resource.RegisterComponent(
 		camera.API,
-		ObjectPCMergeModel,
-		resource.Registration[camera.Camera, *ObjectPCMergeConfig]{
-			Constructor: newObjectPCMerge,
+		MergeAllObjectsModel,
+		resource.Registration[camera.Camera, *MergeAllObjectsConfig]{
+			Constructor: newMergeAllObjects,
 		})
 }
 
-type ObjectPCMergeConfig struct {
+type MergeAllObjectsConfig struct {
 	VisionServices []string `json:"vision_services"`
 	Label          string   `json:"label"`
 
-	// Cleaning pipeline. Each stage is skipped when its primary knob is <= 0.
-	// Zero values get the documented defaults applied in newObjectPCMerge so
-	// existing JSON configs pick up cleaning automatically; set a knob to a
-	// negative value to explicitly disable a stage.
-	OutlierMeanK        int     `json:"outlier_mean_k,omitempty"`
-	OutlierStdDevThresh float64 `json:"outlier_std_dev_thresh,omitempty"`
-
-	ClusterMaxDistance         float64 `json:"cluster_max_distance,omitempty"`
-	ClusterMinPointsPerSegment int     `json:"cluster_min_points_per_segment,omitempty"`
-	ClusterMinPointsPerCluster int     `json:"cluster_min_points_per_cluster,omitempty"`
-
-	MaxRadiusFromCenter float64 `json:"max_radius_from_center,omitempty"`
-
-	DisableCleaning bool `json:"disable_cleaning,omitempty"`
+	pcclean.Config
 }
 
-func (c *ObjectPCMergeConfig) Validate(path string) ([]string, []string, error) {
+func (c *MergeAllObjectsConfig) Validate(path string) ([]string, []string, error) {
 	if len(c.VisionServices) == 0 {
 		return nil, nil, fmt.Errorf("need at least one vision service")
 	}
@@ -55,14 +43,14 @@ func (c *ObjectPCMergeConfig) Validate(path string) ([]string, []string, error) 
 	return c.VisionServices, nil, nil
 }
 
-func newObjectPCMerge(ctx context.Context, deps resource.Dependencies, config resource.Config, logger logging.Logger) (camera.Camera, error) {
-	newConf, err := resource.NativeConfig[*ObjectPCMergeConfig](config)
+func newMergeAllObjects(ctx context.Context, deps resource.Dependencies, config resource.Config, logger logging.Logger) (camera.Camera, error) {
+	newConf, err := resource.NativeConfig[*MergeAllObjectsConfig](config)
 	if err != nil {
 		return nil, err
 	}
-	fillCleaningDefaults(newConf)
+	pcclean.FillDefaults(&newConf.Config)
 
-	cc := &ObjectPCMergeCamera{
+	cc := &MergeAllObjectsCamera{
 		name:     config.ResourceName(),
 		cfg:      newConf,
 		services: []vision.Service{},
@@ -80,25 +68,25 @@ func newObjectPCMerge(ctx context.Context, deps resource.Dependencies, config re
 	return cc, nil
 }
 
-type ObjectPCMergeCamera struct {
+type MergeAllObjectsCamera struct {
 	resource.AlwaysRebuild
 	resource.TriviallyCloseable
 
 	name     resource.Name
-	cfg      *ObjectPCMergeConfig
+	cfg      *MergeAllObjectsConfig
 	logger   logging.Logger
 	services []vision.Service
 }
 
-func (opc *ObjectPCMergeCamera) Name() resource.Name {
+func (opc *MergeAllObjectsCamera) Name() resource.Name {
 	return opc.name
 }
 
-func (opc *ObjectPCMergeCamera) Status(ctx context.Context) (map[string]interface{}, error) {
+func (opc *MergeAllObjectsCamera) Status(ctx context.Context) (map[string]interface{}, error) {
 	return map[string]interface{}{}, nil
 }
 
-func (opc *ObjectPCMergeCamera) Images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+func (opc *MergeAllObjectsCamera) Images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	pc, err := opc.NextPointCloud(ctx, extra)
 	if err != nil {
 		return nil, resource.ResponseMetadata{}, err
@@ -112,11 +100,11 @@ func (opc *ObjectPCMergeCamera) Images(ctx context.Context, filterSourceNames []
 	return []camera.NamedImage{ni}, resource.ResponseMetadata{CapturedAt: time.Now()}, nil
 }
 
-func (opc *ObjectPCMergeCamera) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
+func (opc *MergeAllObjectsCamera) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
 	return nil, nil
 }
 
-func (opc *ObjectPCMergeCamera) NextPointCloud(ctx context.Context, extra map[string]interface{}) (pointcloud.PointCloud, error) {
+func (opc *MergeAllObjectsCamera) NextPointCloud(ctx context.Context, extra map[string]interface{}) (pointcloud.PointCloud, error) {
 	inputs := []pointcloud.PointCloud{}
 	totalSize := 0
 
@@ -153,7 +141,7 @@ func (opc *ObjectPCMergeCamera) NextPointCloud(ctx context.Context, extra map[st
 		}
 	}
 
-	cleaned, err := cleanMerged(big, opc.cfg)
+	cleaned, err := pcclean.Clean(big, &opc.cfg.Config)
 	if err != nil {
 		return nil, err
 	}
@@ -161,12 +149,12 @@ func (opc *ObjectPCMergeCamera) NextPointCloud(ctx context.Context, extra map[st
 	return cleaned, nil
 }
 
-func (opc *ObjectPCMergeCamera) Properties(ctx context.Context) (camera.Properties, error) {
+func (opc *MergeAllObjectsCamera) Properties(ctx context.Context) (camera.Properties, error) {
 	return camera.Properties{
 		SupportsPCD: true,
 	}, nil
 }
 
-func (opc *ObjectPCMergeCamera) Geometries(ctx context.Context, _ map[string]interface{}) ([]spatialmath.Geometry, error) {
+func (opc *MergeAllObjectsCamera) Geometries(ctx context.Context, _ map[string]interface{}) ([]spatialmath.Geometry, error) {
 	return nil, nil
 }

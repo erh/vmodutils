@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -44,6 +45,23 @@ type MultiArmPositionSwitchConfig struct {
 	Extra                        map[string]any          `json:"extra,omitempty"`
 	Constraints                  *motionplan.Constraints `json:"constraints,omitempty"`
 	WriteFilesToCaptureDirectory bool                    `json:"write_files_to_capture_directory,omitempty"`
+
+	MaxSpeedDegsPerSec         float64 `json:"max_speed_degs_per_sec,omitempty"`
+	MaxAccelerationDegsPerSec2 float64 `json:"max_acceleration_degs_per_sec2,omitempty"`
+}
+
+func (c *MultiArmPositionSwitchConfig) moveOptions() *arm.MoveOptions {
+	if c.MaxSpeedDegsPerSec <= 0 && c.MaxAccelerationDegsPerSec2 <= 0 {
+		return nil
+	}
+	opts := &arm.MoveOptions{}
+	if c.MaxSpeedDegsPerSec > 0 {
+		opts.MaxVelRads = c.MaxSpeedDegsPerSec * math.Pi / 180.0
+	}
+	if c.MaxAccelerationDegsPerSec2 > 0 {
+		opts.MaxAccRads = c.MaxAccelerationDegsPerSec2 * math.Pi / 180.0
+	}
+	return opts
 }
 
 func (c *MultiArmPositionSwitchConfig) Validate(path string) ([]string, []string, error) {
@@ -80,6 +98,13 @@ func (c *MultiArmPositionSwitchConfig) Validate(path string) ([]string, []string
 
 	if c.Extra != nil && c.Extra[extraParamsKeyGoalState] != nil {
 		return nil, nil, ErrCannotSpecifyGoalStateInExtra
+	}
+
+	if c.MaxSpeedDegsPerSec < 0 {
+		return nil, nil, fmt.Errorf("%s.max_speed_degs_per_sec must be non-negative, got %v", path, c.MaxSpeedDegsPerSec)
+	}
+	if c.MaxAccelerationDegsPerSec2 < 0 {
+		return nil, nil, fmt.Errorf("%s.max_acceleration_degs_per_sec2 must be non-negative, got %v", path, c.MaxAccelerationDegsPerSec2)
 	}
 
 	return reqDeps, nil, nil
@@ -260,7 +285,7 @@ func (maps *MultiArmPositionSwitch) goToPosition(ctx context.Context, position u
 		}
 		moveErr = goToPositionUsingJointToJointMotion(ctx, goalInputs, maps.arm.Name().Name, maps.motion, maps.visionServices, maps.cfg.Extra, maps.cfg.Constraints, maps.logger)
 	} else {
-		moveErr = goToPositionUsingMoveToJointPositions(ctx, joints, maps.arm, maps.cfg.Extra, maps.logger)
+		moveErr = goToPositionUsingMoveToJointPositions(ctx, joints, maps.arm, maps.cfg.moveOptions(), maps.cfg.Extra, maps.logger)
 	}
 
 	if maps.cfg.WriteFilesToCaptureDirectory {

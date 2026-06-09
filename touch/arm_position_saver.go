@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 
 	"github.com/golang/geo/r3"
 
@@ -42,6 +43,23 @@ type ArmPositionSaverConfig struct {
 	VisionServices []string                             `json:"vision_services,omitempty"`
 	Constraints    *motionplan.Constraints              `json:"constraints,omitempty"`
 	Extra          map[string]interface{}               `json:"extra,omitempty"`
+
+	MaxSpeedDegsPerSec         float64 `json:"max_speed_degs_per_sec,omitempty"`
+	MaxAccelerationDegsPerSec2 float64 `json:"max_acceleration_degs_per_sec2,omitempty"`
+}
+
+func (c *ArmPositionSaverConfig) moveOptions() *arm.MoveOptions {
+	if c.MaxSpeedDegsPerSec <= 0 && c.MaxAccelerationDegsPerSec2 <= 0 {
+		return nil
+	}
+	opts := &arm.MoveOptions{}
+	if c.MaxSpeedDegsPerSec > 0 {
+		opts.MaxVelRads = c.MaxSpeedDegsPerSec * math.Pi / 180.0
+	}
+	if c.MaxAccelerationDegsPerSec2 > 0 {
+		opts.MaxAccRads = c.MaxAccelerationDegsPerSec2 * math.Pi / 180.0
+	}
+	return opts
 }
 
 func (c *ArmPositionSaverConfig) Validate(path string) ([]string, []string, error) {
@@ -63,6 +81,13 @@ func (c *ArmPositionSaverConfig) Validate(path string) ([]string, []string, erro
 
 	if c.Extra != nil && c.Extra[extraParamsKeyGoalState] != nil {
 		return nil, nil, ErrCannotSpecifyGoalStateInExtra
+	}
+
+	if c.MaxSpeedDegsPerSec < 0 {
+		return nil, nil, fmt.Errorf("%s.max_speed_degs_per_sec must be non-negative, got %v", path, c.MaxSpeedDegsPerSec)
+	}
+	if c.MaxAccelerationDegsPerSec2 < 0 {
+		return nil, nil, fmt.Errorf("%s.max_acceleration_degs_per_sec2 must be non-negative, got %v", path, c.MaxAccelerationDegsPerSec2)
 	}
 
 	return deps, nil, nil
@@ -217,7 +242,7 @@ func (aps *ArmPositionSaver) goToSavePosition(ctx context.Context) error {
 			goal := referenceframe.FrameSystemInputs{aps.arm.Name().Name: floatsToInputs(aps.cfg.Joints)}
 			return goToPositionUsingJointToJointMotion(ctx, goal, aps.arm.Name().Name, aps.motion, aps.visionServices, aps.cfg.Extra, aps.cfg.Constraints, aps.logger)
 		} else {
-			return goToPositionUsingMoveToJointPositions(ctx, aps.cfg.Joints, aps.arm, aps.cfg.Extra, aps.logger)
+			return goToPositionUsingMoveToJointPositions(ctx, aps.cfg.Joints, aps.arm, aps.cfg.moveOptions(), aps.cfg.Extra, aps.logger)
 		}
 	}
 

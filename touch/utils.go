@@ -395,12 +395,16 @@ func goToPositionUsingJointToJointMotion(
 func goToPositionUsingMoveToJointPositions(
 	ctx context.Context,
 	joints []float64,
-	arm arm.Arm,
+	armResource arm.Arm,
+	opts *arm.MoveOptions,
 	extra map[string]any,
 	logger logging.Logger,
 ) error {
 	logger.Debugf("going to position using MoveToJointPositions")
-	return arm.MoveToJointPositions(ctx, joints, extra)
+	if opts != nil {
+		return armResource.MoveThroughJointPositions(ctx, [][]float64{joints}, opts, extra)
+	}
+	return armResource.MoveToJointPositions(ctx, joints, extra)
 }
 
 func goToPositionUsingCartesianMotion(

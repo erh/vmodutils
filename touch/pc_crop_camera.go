@@ -66,10 +66,6 @@ func newCropCamera(ctx context.Context, deps resource.Dependencies, config resou
 		return nil, err
 	}
 
-	// The crop camera only needs the robot's frame system to transform point clouds.
-	// Every module is handed a $framesystem dependency backed by its existing local
-	// connection to the parent viam-server, so use that instead of dialing a whole
-	// robot client back to our own machine (which would relay through TURN/coturn).
 	cc.fs, err = framesystem.FromDependencies(deps)
 	if err != nil {
 		return nil, err
@@ -238,8 +234,6 @@ func (cc *cropCamera) Properties(ctx context.Context) (camera.Properties, error)
 }
 
 func (cc *cropCamera) Close(ctx context.Context) error {
-	// Nothing to close: the frame system client is backed by the module's existing
-	// connection to the parent viam-server, whose lifecycle the module SDK owns.
 	return nil
 }
 

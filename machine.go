@@ -13,6 +13,7 @@ import (
 	"go.viam.com/rdk/robot/client"
 	"go.viam.com/rdk/robot/framesystem"
 	"go.viam.com/rdk/utils"
+	"go.viam.com/utils/rpc"
 )
 
 func MachineToDependencies(client robot.Robot) (resource.Dependencies, error) {
@@ -35,6 +36,33 @@ func MachineToDependencies(client robot.Robot) (resource.Dependencies, error) {
 	deps[framesystem.PublicServiceName] = r
 
 	return deps, nil
+}
+
+func ConnectToMachineFromEnv(ctx context.Context, logger logging.Logger) (robot.Robot, error) {
+	params := []string{}
+	for _, pp := range []string{utils.MachineFQDNEnvVar, utils.APIKeyIDEnvVar, utils.APIKeyEnvVar} {
+		x := os.Getenv(pp)
+		if x == "" {
+			return nil, fmt.Errorf("no environment variable for %s", pp)
+		}
+		params = append(params, x)
+	}
+	return ConnectToMachine(ctx, logger, params[0], params[1], params[2])
+}
+
+func ConnectToMachine(ctx context.Context, logger logging.Logger, host, apiKeyId, apiKey string) (robot.Robot, error) {
+	return client.New(
+		ctx,
+		host,
+		logger,
+		client.WithDialOptions(rpc.WithEntityCredentials(
+			apiKeyId,
+			rpc.Credentials{
+				Type:    rpc.CredentialsTypeAPIKey,
+				Payload: apiKey,
+			},
+		)),
+	)
 }
 
 // ConnectToHostFromCLIToken uses the viam cli token to login to a machine with just a hostname.

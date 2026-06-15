@@ -25,7 +25,7 @@ The `erh:vmodutils` module bundles a few utility models for arm-based automation
 
 **API:** `rdk:component:camera`
 
-Wraps a source camera and crops its point cloud to an axis-aligned bounding box specified in the **world frame**. Optionally filters points by RGB color similarity.
+Wraps a source camera and crops its point cloud to an axis-aligned bounding box. By default the box is specified in the **world frame**; set `crop_in_local_frame` to apply it in the source camera's local frame instead. Optionally filters points by RGB color similarity.
 
 ### Configuration
 
@@ -39,7 +39,8 @@ Wraps a source camera and crops its point cloud to an axis-aligned bounding box 
     { "Color": { "R": 255, "G": 0, "B": 0, "A": 255 }, "Distance": 50 }
   ],
   "transform_back_to_source_frame": false,
-  "forward_source_images": false
+  "forward_source_images": false,
+  "crop_in_local_frame": false
 }
 ```
 
@@ -47,11 +48,12 @@ Wraps a source camera and crops its point cloud to an axis-aligned bounding box 
 | -------------------------------- | ------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src`                            | string | Yes      | Name of the source camera.                                                                                                                                                                                             |
 | `src_frame`                      | string | No       | Frame the source point cloud is in. Defaults to the source camera's name. Points are transformed from this to `world`.                                                                                                 |
-| `min`                            | vector | No       | Lower-bound `(X, Y, Z)` of the crop box in the world frame.                                                                                                                                                            |
-| `max`                            | vector | No       | Upper-bound `(X, Y, Z)` of the crop box in the world frame.                                                                                                                                                            |
+| `min`                            | vector | No       | Lower-bound `(X, Y, Z)` of the crop box, in the world frame (or the source camera's local frame when `crop_in_local_frame` is `true`).                                                                                  |
+| `max`                            | vector | No       | Upper-bound `(X, Y, Z)` of the crop box, in the world frame (or the source camera's local frame when `crop_in_local_frame` is `true`).                                                                                  |
 | `good_colors`                    | array  | No       | RGB color filters. A point is kept only if its color is within `Distance` (Euclidean RGB) of every listed `Color`.                                                                                                     |
 | `transform_back_to_source_frame` | bool   | No       | If `true`, after cropping in world coordinates the point cloud is transformed back into `src_frame`, and `Properties` forwards the source camera's `IntrinsicParams` / `DistortionParams`. Defaults to `false`.        |
 | `forward_source_images`          | bool   | No       | If `true`, `Images` appends the source camera's `NamedImage`s after the `cropped` image so downstream consumers expecting `color` / `depth` still get them. Defaults to `false`.                                       |
+| `crop_in_local_frame`            | bool   | No       | If `true`, the `min`/`max` box is applied in the source camera's local frame and the `world` transform is skipped; `Properties` forwards the source camera's `IntrinsicParams` / `DistortionParams`. Cannot be combined with `transform_back_to_source_frame`. Defaults to `false`. |
 
 The cropped point cloud is exposed via `NextPointCloud`. `Images` returns the cropped 2D PNG as the first `NamedImage` (named `cropped`); when `forward_source_images` is `true` it is followed by whatever the source camera's `Images` call returns.
 

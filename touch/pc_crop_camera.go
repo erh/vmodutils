@@ -40,11 +40,18 @@ type CropCameraConfig struct {
 
 	TransformBackToSourceFrame bool `json:"transform_back_to_source_frame"`
 	ForwardSourceImages        bool `json:"forward_source_images"`
+
+	// CropInLocalFrame, when true, applies the Min/Max crop box in the source
+	// camera's local frame and skips conversion to/from the world frame.
+	CropInLocalFrame bool `json:"crop_in_local_frame"`
 }
 
 func (ccc *CropCameraConfig) Validate(path string) ([]string, []string, error) {
 	if ccc.Src == "" {
 		return nil, nil, fmt.Errorf("need a src camera")
+	}
+	if ccc.CropInLocalFrame && ccc.TransformBackToSourceFrame {
+		return nil, nil, fmt.Errorf("cannot set both crop_in_local_frame and transform_back_to_source_frame")
 	}
 	return []string{ccc.Src}, nil, nil
 }
@@ -193,9 +200,11 @@ func (cc *cropCamera) doNextPointCloud(ctx context.Context, extra map[string]int
 		srcFrame = cc.cfg.SrcFrame
 	}
 
-	pc, err = cc.fs.TransformPointCloud(ctx, pc, srcFrame, "world")
-	if err != nil {
-		return nil, err
+	if !cc.cfg.CropInLocalFrame {
+		pc, err = cc.fs.TransformPointCloud(ctx, pc, srcFrame, "world")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	timeB := time.Since(start)
@@ -221,7 +230,7 @@ func (cc *cropCamera) Properties(ctx context.Context) (camera.Properties, error)
 	props := camera.Properties{
 		SupportsPCD: true,
 	}
-	if !cc.cfg.TransformBackToSourceFrame {
+	if !cc.cfg.TransformBackToSourceFrame && !cc.cfg.CropInLocalFrame {
 		return props, nil
 	}
 	srcProps, err := cc.src.Properties(ctx)

@@ -13,7 +13,7 @@ import (
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/pointcloud"
 	"go.viam.com/rdk/resource"
-	"go.viam.com/rdk/robot"
+	"go.viam.com/rdk/robot/framesystem"
 	"go.viam.com/rdk/spatialmath"
 
 	"github.com/erh/vmodutils"
@@ -73,7 +73,7 @@ func newCropCamera(ctx context.Context, deps resource.Dependencies, config resou
 		return nil, err
 	}
 
-	cc.client, err = vmodutils.ConnectToMachineFromEnv(ctx, logger)
+	cc.fs, err = framesystem.FromDependencies(deps)
 	if err != nil {
 		return nil, err
 	}
@@ -88,8 +88,8 @@ type cropCamera struct {
 	cfg    *CropCameraConfig
 	logger logging.Logger
 
-	src    camera.Camera
-	client robot.Robot
+	src camera.Camera
+	fs  framesystem.Service
 
 	lock               sync.Mutex
 	active             bool
@@ -201,7 +201,7 @@ func (cc *cropCamera) doNextPointCloud(ctx context.Context, extra map[string]int
 	}
 
 	if !cc.cfg.CropInLocalFrame {
-		pc, err = cc.client.TransformPointCloud(ctx, pc, srcFrame, "world")
+		pc, err = cc.fs.TransformPointCloud(ctx, pc, srcFrame, "world")
 		if err != nil {
 			return nil, err
 		}
@@ -213,7 +213,7 @@ func (cc *cropCamera) doNextPointCloud(ctx context.Context, extra map[string]int
 	timeC := time.Since(start)
 
 	if cc.cfg.TransformBackToSourceFrame {
-		pc, err = cc.client.TransformPointCloud(ctx, pc, "world", srcFrame)
+		pc, err = cc.fs.TransformPointCloud(ctx, pc, "world", srcFrame)
 		if err != nil {
 			return nil, err
 		}
@@ -243,7 +243,7 @@ func (cc *cropCamera) Properties(ctx context.Context) (camera.Properties, error)
 }
 
 func (cc *cropCamera) Close(ctx context.Context) error {
-	return cc.client.Close(ctx)
+	return nil
 }
 
 func (cc *cropCamera) Geometries(ctx context.Context, _ map[string]interface{}) ([]spatialmath.Geometry, error) {

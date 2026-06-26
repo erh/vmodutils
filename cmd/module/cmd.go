@@ -2,6 +2,7 @@ package main
 
 import (
 	"go.viam.com/rdk/components/camera"
+	"go.viam.com/rdk/components/generic"
 	"go.viam.com/rdk/components/gripper"
 	"go.viam.com/rdk/components/sensor"
 	"go.viam.com/rdk/components/switch"
@@ -28,6 +29,7 @@ func main() {
 		resource.APIModel{toggleswitch.API, touch.MultiArmPositionSwitchModel},
 		resource.APIModel{sensor.API, touch.CalibrationCheckerModel},
 		resource.APIModel{sensor.API, vmodutils.SessionCaptureModel},
+		resource.APIModel{generic.API, vmodutils.HTTPRedirectModel},
 	)
 
 }

@@ -84,6 +84,12 @@
         "model": "erh:vmodutils:session-capture",
         "markdown_link": "README.md#model-erhvmodutilssession-capture",
         "short_description": "switch that toggles data-capture overrides for a list of components, tagging them with a session id"
+    },
+    {
+        "api": "rdk:component:generic",
+        "model": "erh:vmodutils:http-redirect",
+        "markdown_link": "README.md#model-erhvmodutilshttp-redirect",
+        "short_description": "listens on a port and temporarily redirects all http traffic to a configured host"
     }
   ],
   "applications": null,

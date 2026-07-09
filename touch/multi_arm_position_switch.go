@@ -253,10 +253,10 @@ func (maps *MultiArmPositionSwitch) goToPosition(ctx context.Context, position u
 	}
 	defer maps.executing.Store(false)
 
-	traceID := getTraceID(ctx)
-	dirPath := file_utils.GetPathInCaptureDir(fmt.Sprintf("tag=%s", traceID))
-	if traceID == "" && maps.cfg.WriteFilesToCaptureDirectory {
-		maps.logger.Warnf("no traceID set, will write files directly to capture directory")
+	passID := getPassID(ctx)
+	dirPath := file_utils.GetPathInCaptureDir(fmt.Sprintf("tag=%s", passID))
+	if passID == "" && maps.cfg.WriteFilesToCaptureDirectory {
+		maps.logger.Warnf("no passID set, will write files directly to capture directory")
 	}
 
 	maps.updatePosition(position)

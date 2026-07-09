@@ -23,10 +23,14 @@ import (
 	"go.viam.com/rdk/services/motion"
 	"go.viam.com/rdk/services/vision"
 	"go.viam.com/rdk/spatialmath"
-	"go.viam.com/utils/trace"
+	"go.viam.com/rdk/utils/contextutils/metadata"
 
 	"github.com/erh/vmodutils/file_utils"
 )
+
+// passIDMetadataKey is the request-metadata key under which callers propagate a
+// pass ID. It must match the key set by the caller (e.g. sanding's passctx).
+const passIDMetadataKey = "sanding-pass-id"
 
 func PCFindHighestInRegion(pc pointcloud.PointCloud, box image.Rectangle) r3.Vector {
 
@@ -235,8 +239,8 @@ func GetApproachPoint(p r3.Vector, deltaLinear float64, o *spatialmath.Orientati
 	return approachPoint
 }
 
-func writeFilesForPosition(ctx context.Context, traceID string, pos int, pc pointcloud.PointCloud, pif *referenceframe.PoseInFrame, pcInWorld pointcloud.PointCloud, images []camera.NamedImage, imagesMd resource.ResponseMetadata) error {
-	dirPath := file_utils.GetPathInCaptureDir(fmt.Sprintf("tag=%s", traceID))
+func writeFilesForPosition(ctx context.Context, passID string, pos int, pc pointcloud.PointCloud, pif *referenceframe.PoseInFrame, pcInWorld pointcloud.PointCloud, images []camera.NamedImage, imagesMd resource.ResponseMetadata) error {
+	dirPath := file_utils.GetPathInCaptureDir(fmt.Sprintf("tag=%s", passID))
 
 	// Save pcd from camera in camera frame
 	if err := file_utils.SavePointCloudFile(pc, dirPath, "imaging_camera_frame_"+strconv.Itoa(pos)+".pcd", time.Now()); err != nil {
@@ -275,9 +279,9 @@ func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswi
 	pcsInWorld := []pointcloud.PointCloud{}
 	totalSize := 0
 
-	// If a traceID is present, we will write files to a traceID sub-directory in the capture directory.
+	// If a passID is present, we will write files to a passID sub-directory in the capture directory.
 	// Otherwise, we will write files at the top-level of the capture directory.
-	traceID := getTraceID(ctx)
+	passID := getPassID(ctx)
 
 	for i, p := range positions {
 		err := p.SetPosition(ctx, 2, nil)
@@ -313,7 +317,7 @@ func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswi
 			if err != nil {
 				return nil, fmt.Errorf("couldn't get images from camera: %w", err)
 			}
-			if err := writeFilesForPosition(ctx, traceID, i, pc, pif, pcInWorld, images, imagesMd); err != nil {
+			if err := writeFilesForPosition(ctx, passID, i, pc, pif, pcInWorld, images, imagesMd); err != nil {
 				return nil, err
 			}
 		}
@@ -331,7 +335,7 @@ func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswi
 
 	if writeFilesToCaptureDirectory {
 		// Save merged pcd
-		dirPath := file_utils.GetPathInCaptureDir(fmt.Sprintf("tag=%s", traceID))
+		dirPath := file_utils.GetPathInCaptureDir(fmt.Sprintf("tag=%s", passID))
 		if err := file_utils.SavePointCloudFile(big, dirPath, "merged.pcd", time.Now()); err != nil {
 			return nil, err
 		}
@@ -491,9 +495,9 @@ func GetMergedPointCloudFromMultiPositionSwitch(ctx context.Context, s toggleswi
 	pcsInWorld := []pointcloud.PointCloud{}
 	totalSize := 0
 
-	// If a traceID is present, we will write files to a traceID sub-directory in the capture directory.
+	// If a passID is present, we will write files to a passID sub-directory in the capture directory.
 	// Otherwise, we will write files at the top-level of the capture directory.
-	traceID := getTraceID(ctx)
+	passID := getPassID(ctx)
 
 	numPositions, _, err := s.GetNumberOfPositions(ctx, nil)
 	if err != nil {
@@ -534,7 +538,7 @@ func GetMergedPointCloudFromMultiPositionSwitch(ctx context.Context, s toggleswi
 				return nil, fmt.Errorf("couldn't get images from camera: %w", err)
 			}
 
-			if err := writeFilesForPosition(ctx, traceID, int(i), pc, pif, pcInWorld, images, imagesMd); err != nil {
+			if err := writeFilesForPosition(ctx, passID, int(i), pc, pif, pcInWorld, images, imagesMd); err != nil {
 				return nil, err
 			}
 		}
@@ -551,10 +555,7 @@ func GetMergedPointCloudFromMultiPositionSwitch(ctx context.Context, s toggleswi
 	return big, nil
 }
 
-func getTraceID(ctx context.Context) string {
-	traceID := ""
-	if span := trace.FromContext(ctx); span != nil {
-		traceID = span.SpanContext().TraceID().String()
-	}
-	return traceID
+func getPassID(ctx context.Context) string {
+	passID, _ := metadata.Get(ctx, passIDMetadataKey)
+	return passID
 }

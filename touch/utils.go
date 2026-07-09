@@ -28,10 +28,6 @@ import (
 	"github.com/erh/vmodutils/file_utils"
 )
 
-// passIDMetadataKey is the request-metadata key under which callers propagate a
-// pass ID. It must match the key set by the caller (e.g. sanding's passctx).
-const passIDMetadataKey = "sanding-pass-id"
-
 func PCFindHighestInRegion(pc pointcloud.PointCloud, box image.Rectangle) r3.Vector {
 
 	best := r3.Vector{Z: -100000}
@@ -554,6 +550,8 @@ func GetMergedPointCloudFromMultiPositionSwitch(ctx context.Context, s toggleswi
 
 	return big, nil
 }
+
+const passIDMetadataKey = "sanding-pass-id"
 
 func getPassID(ctx context.Context) string {
 	passID, _ := metadata.Get(ctx, passIDMetadataKey)

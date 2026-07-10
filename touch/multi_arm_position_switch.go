@@ -38,18 +38,16 @@ func init() {
 }
 
 type MultiArmPositionSwitchConfig struct {
-	Arm                          string                  `json:"arm,omitempty"`
-	JointsList                   [][]float64             `json:"joints_list,omitempty"`
-	Motion                       string                  `json:"motion,omitempty"`
-	VisionServices               []string                `json:"vision_services,omitempty"`
-	Extra                        map[string]any          `json:"extra,omitempty"`
-	Constraints                  *motionplan.Constraints `json:"constraints,omitempty"`
-	WriteFilesToCaptureDirectory bool                    `json:"write_files_to_capture_directory,omitempty"`
-	// CaptureSubDirMetadataKey is the request-metadata key whose value names a capture subdirectory.
-	// CaptureSubDirFormatString formats that value into the subdirectory name (e.g. "tag=%s").
-	// When either is empty, files are written at the top level of the capture directory.
-	CaptureSubDirMetadataKey  string `json:"capture_sub_dir_metadata_key,omitempty"`
-	CaptureSubDirFormatString string `json:"capture_sub_dir_format_string,omitempty"`
+	Arm            string                  `json:"arm,omitempty"`
+	JointsList     [][]float64             `json:"joints_list,omitempty"`
+	Motion         string                  `json:"motion,omitempty"`
+	VisionServices []string                `json:"vision_services,omitempty"`
+	Extra          map[string]any          `json:"extra,omitempty"`
+	Constraints    *motionplan.Constraints `json:"constraints,omitempty"`
+
+	WriteFilesToCaptureDirectory bool   `json:"write_files_to_capture_directory,omitempty"`
+	CaptureSubDirMetadataKey     string `json:"capture_sub_dir_metadata_key,omitempty"`
+	CaptureSubDirFormatString    string `json:"capture_sub_dir_format_string,omitempty"`
 
 	MaxSpeedDegsPerSec         float64 `json:"max_speed_degs_per_sec,omitempty"`
 	MaxAccelerationDegsPerSec2 float64 `json:"max_acceleration_degs_per_sec2,omitempty"`

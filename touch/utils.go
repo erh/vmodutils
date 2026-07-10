@@ -271,13 +271,13 @@ func writeFilesForPosition(ctx context.Context, passID string, pos int, pc point
 	return nil
 }
 
-func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service, writeFilesToCaptureDirectory bool) (pointcloud.PointCloud, error) {
+func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service, writeFilesToCaptureDirectory bool, passIDMetadataKey string) (pointcloud.PointCloud, error) {
 	pcsInWorld := []pointcloud.PointCloud{}
 	totalSize := 0
 
 	// If a passID is present, we will write files to a passID sub-directory in the capture directory.
 	// Otherwise, we will write files at the top-level of the capture directory.
-	passID := getPassID(ctx)
+	passID := getPassID(ctx, passIDMetadataKey)
 
 	for i, p := range positions {
 		err := p.SetPosition(ctx, 2, nil)
@@ -487,13 +487,13 @@ func floatsToInputs(j []float64) []referenceframe.Input {
 	return out
 }
 
-func GetMergedPointCloudFromMultiPositionSwitch(ctx context.Context, s toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service, writeFilesToCaptureDirectory bool) (pointcloud.PointCloud, error) {
+func GetMergedPointCloudFromMultiPositionSwitch(ctx context.Context, s toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service, writeFilesToCaptureDirectory bool, passIDMetadataKey string) (pointcloud.PointCloud, error) {
 	pcsInWorld := []pointcloud.PointCloud{}
 	totalSize := 0
 
 	// If a passID is present, we will write files to a passID sub-directory in the capture directory.
 	// Otherwise, we will write files at the top-level of the capture directory.
-	passID := getPassID(ctx)
+	passID := getPassID(ctx, passIDMetadataKey)
 
 	numPositions, _, err := s.GetNumberOfPositions(ctx, nil)
 	if err != nil {
@@ -551,9 +551,13 @@ func GetMergedPointCloudFromMultiPositionSwitch(ctx context.Context, s toggleswi
 	return big, nil
 }
 
-const passIDMetadataKey = "sanding-pass-id"
-
-func getPassID(ctx context.Context) string {
-	passID, _ := metadata.Get(ctx, passIDMetadataKey)
+// getPassID returns the pass ID carried in request metadata under metadataKey.
+// An empty metadataKey (unconfigured) yields an empty pass ID, so files are
+// written at the top level of the capture directory.
+func getPassID(ctx context.Context, metadataKey string) string {
+	if metadataKey == "" {
+		return ""
+	}
+	passID, _ := metadata.Get(ctx, metadataKey)
 	return passID
 }

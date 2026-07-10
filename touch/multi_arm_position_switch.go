@@ -45,9 +45,11 @@ type MultiArmPositionSwitchConfig struct {
 	Extra                        map[string]any          `json:"extra,omitempty"`
 	Constraints                  *motionplan.Constraints `json:"constraints,omitempty"`
 	WriteFilesToCaptureDirectory bool                    `json:"write_files_to_capture_directory,omitempty"`
-	// PassIDMetadataKey is the request-metadata key whose value tags written files (e.g. "sanding-pass-id").
-	// When empty, files are written at the top level of the capture directory.
-	PassIDMetadataKey string `json:"pass_id_metadata_key,omitempty"`
+	// CaptureSubDirMetadataKey is the request-metadata key whose value names a capture subdirectory.
+	// CaptureSubDirFormatString formats that value into the subdirectory name (e.g. "tag=%s").
+	// When either is empty, files are written at the top level of the capture directory.
+	CaptureSubDirMetadataKey  string `json:"capture_sub_dir_metadata_key,omitempty"`
+	CaptureSubDirFormatString string `json:"capture_sub_dir_format_string,omitempty"`
 
 	MaxSpeedDegsPerSec         float64 `json:"max_speed_degs_per_sec,omitempty"`
 	MaxAccelerationDegsPerSec2 float64 `json:"max_acceleration_degs_per_sec2,omitempty"`
@@ -256,10 +258,10 @@ func (maps *MultiArmPositionSwitch) goToPosition(ctx context.Context, position u
 	}
 	defer maps.executing.Store(false)
 
-	passID := getPassID(ctx, maps.cfg.PassIDMetadataKey)
-	dirPath := file_utils.GetPathInCaptureDir(fmt.Sprintf("tag=%s", passID))
-	if passID == "" && maps.cfg.WriteFilesToCaptureDirectory {
-		maps.logger.Warnf("no passID set, will write files directly to capture directory")
+	subDir := captureSubDir(ctx, maps.cfg.CaptureSubDirFormatString, maps.cfg.CaptureSubDirMetadataKey)
+	dirPath := file_utils.GetPathInCaptureDir(subDir)
+	if subDir == "" && maps.cfg.WriteFilesToCaptureDirectory {
+		maps.logger.Warnf("no capture sub-directory metadata present, writing files directly to capture directory")
 	}
 
 	maps.updatePosition(position)

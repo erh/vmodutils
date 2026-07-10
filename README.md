@@ -288,7 +288,7 @@ Returns:
 
 A switch with one position per pre-configured joint goal. `SetPosition(i)` moves the arm to `joints_list[i]`. Only one move can be in flight at a time — concurrent calls return an error.
 
-When `write_files_to_capture_directory` is enabled, every move writes the config, goal, and final joint positions to the data-manager capture directory. If `pass_id_metadata_key` is set and a matching value is propagated through the request metadata, files are placed under a `tag=<pass_id>` subdirectory.
+When `write_files_to_capture_directory` is enabled, every move writes the config, goal, and final joint positions to the data-manager capture directory. If both `capture_sub_dir_metadata_key` and `capture_sub_dir_format_string` are set and a matching value is propagated through the request metadata, files are placed under a subdirectory named by formatting that value (e.g. `tag=<value>`).
 
 ### Configuration
 
@@ -301,7 +301,8 @@ When `write_files_to_capture_directory` is enabled, every move writes the config
   "extra": { },
   "constraints": { },
   "write_files_to_capture_directory": false,
-  "pass_id_metadata_key": "<string>"
+  "capture_sub_dir_metadata_key": "<string>",
+  "capture_sub_dir_format_string": "tag=%s"
 }
 ```
 
@@ -314,7 +315,8 @@ When `write_files_to_capture_directory` is enabled, every move writes the config
 | `extra`                            | object    | No       | Arbitrary `extra` map forwarded to motion. May not contain `goal_state`.                                                 |
 | `constraints`                      | object    | No       | Motion constraints forwarded to `motion.Move` (only used when `motion` is set).                                          |
 | `write_files_to_capture_directory` | bool      | No       | When `true`, persists config, goal, and actual joint values to the capture directory on every move. Defaults to `false`. |
-| `pass_id_metadata_key`             | string    | No       | Request-metadata key whose value tags written files as a `tag=<pass_id>` subdirectory. When unset, files are written at the top level of the capture directory. |
+| `capture_sub_dir_metadata_key`     | string    | No       | Request-metadata key whose value names a capture subdirectory. When unset (or absent from the request), files are written at the top level of the capture directory. |
+| `capture_sub_dir_format_string`    | string    | No       | Format string (e.g. `"tag=%s"`) applied to the metadata value to produce the subdirectory name. Required alongside `capture_sub_dir_metadata_key` for a subdirectory to be created. |
 
 `DoCommand` is not implemented.
 

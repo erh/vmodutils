@@ -556,7 +556,7 @@ func captureSubDir(ctx context.Context, formatString, metadataKey string) string
 		return ""
 	}
 	value, ok := metadata.Get(ctx, metadataKey)
-	if !ok {
+	if !ok || value == "" {
 		return ""
 	}
 	return fmt.Sprintf(formatString, value)

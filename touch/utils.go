@@ -551,15 +551,12 @@ func GetMergedPointCloudFromMultiPositionSwitch(ctx context.Context, s toggleswi
 	return big, nil
 }
 
-// captureSubDir derives a capture subdirectory from request metadata: the value carried under
-// metadataKey formatted with formatString (e.g. "tag=%s"). Returns "" (write at the top level of
-// the capture directory) when either field is unconfigured or the metadata value is absent.
 func captureSubDir(ctx context.Context, formatString, metadataKey string) string {
 	if formatString == "" || metadataKey == "" {
 		return ""
 	}
 	value, ok := metadata.Get(ctx, metadataKey)
-	if !ok || value == "" {
+	if !ok {
 		return ""
 	}
 	return fmt.Sprintf(formatString, value)

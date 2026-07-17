@@ -243,7 +243,7 @@ Replay strategy:
   "motion": "<string>",
   "joints": [0, 0, 0, 0, 0, 0],
   "point": { "X": 0, "Y": 0, "Z": 500 },
-  "orientation": { "OX": 0, "OY": 0, "OZ": 1, "Theta": 0 },
+  "orientation": { "x": 0, "y": 0, "z": 1, "th": 0 },
   "vision_services": ["<string>"],
   "extra": { },
   "constraints": { }
@@ -256,7 +256,7 @@ Replay strategy:
 | `motion`          | string   | No       | Motion service name (typically `"builtin"`). When unset, the switch uses `arm.MoveToJointPositions` directly.    |
 | `joints`          | float[]  | No       | Saved joint positions (radians). Populated automatically by the "update config" position when `motion` is unset. |
 | `point`           | vector   | No       | Saved cartesian point (mm). Populated automatically by "update config" when `motion` is set.                     |
-| `orientation`     | object   | No       | Saved orientation as an `OrientationVectorDegrees` (`OX`, `OY`, `OZ`, `Theta`).                                  |
+| `orientation`     | object   | No       | Saved orientation as an `OrientationVectorDegrees` (`x`, `y`, `z`, `th`).                                        |
 | `vision_services` | string[] | No       | Vision services whose `GetObjectPointClouds` results are added to the world state passed to the motion service.  |
 | `extra`           | object   | No       | Arbitrary `extra` map forwarded to `motion.Move` / `arm.MoveToJointPositions`. May not contain `goal_state`.     |
 | `constraints`     | object   | No       | Motion constraints forwarded to `motion.Move` (only used when `motion` is set).                                  |
@@ -275,7 +275,7 @@ Returns:
 {
   "joints": [0, 0, 0, 0, 0, 0],
   "point": { "X": 0, "Y": 0, "Z": 500 },
-  "orientation": { "OX": 0, "OY": 0, "OZ": 1, "Theta": 0 },
+  "orientation": { "x": 0, "y": 0, "z": 1, "th": 0 },
   "as_json": "<full config as JSON string>"
 }
 ```

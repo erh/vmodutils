@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"go.viam.com/rdk/app"
@@ -273,57 +271,21 @@ func TestGetFragmentId(t *testing.T) {
 	}
 }
 
-func TestAppAddressFromConfigFile(t *testing.T) {
-	dir := t.TempDir()
-
-	t.Run("reads cloud.app_address", func(t *testing.T) {
-		path := filepath.Join(dir, "viam.json")
-		err := os.WriteFile(path, []byte(`{"cloud":{"id":"abc","app_address":"https://app.viam.dev:443"}}`), 0o600)
-		test.That(t, err, test.ShouldBeNil)
-
-		addr, err := appAddressFromConfigFile(path)
-		test.That(t, err, test.ShouldBeNil)
-		test.That(t, addr, test.ShouldEqual, "https://app.viam.dev:443")
-	})
-
-	t.Run("errors when cloud.app_address is missing", func(t *testing.T) {
-		path := filepath.Join(dir, "no-address.json")
-		err := os.WriteFile(path, []byte(`{"cloud":{"id":"abc"}}`), 0o600)
-		test.That(t, err, test.ShouldBeNil)
-
-		_, err = appAddressFromConfigFile(path)
-		test.That(t, err, test.ShouldNotBeNil)
-	})
-
-	t.Run("errors when file does not exist", func(t *testing.T) {
-		_, err := appAddressFromConfigFile(filepath.Join(dir, "missing.json"))
-		test.That(t, err, test.ShouldNotBeNil)
-	})
-}
-
 func TestOptionsWithAppAddress(t *testing.T) {
-	dir := t.TempDir()
-	stagingPath := filepath.Join(dir, "staging.json")
-	err := os.WriteFile(stagingPath, []byte(`{"cloud":{"app_address":"https://app.viam.dev:443"}}`), 0o600)
-	test.That(t, err, test.ShouldBeNil)
-
-	t.Run("uses cloud.app_address from viam config", func(t *testing.T) {
-		opts := optionsWithAppAddress(nil, []string{stagingPath})
+	t.Run("uses APP_ADDRESS when set", func(t *testing.T) {
+		t.Setenv(AppAddressEnvVar, "https://app.viam.dev:443")
+		opts := optionsWithAppAddress(nil)
+		test.That(t, opts, test.ShouldNotBeNil)
 		test.That(t, opts.BaseURL, test.ShouldEqual, "https://app.viam.dev:443")
 	})
 
-	t.Run("falls back when retrieval fails", func(t *testing.T) {
-		opts := optionsWithAppAddress(nil, []string{filepath.Join(dir, "missing.json")})
-		test.That(t, opts.BaseURL, test.ShouldEqual, defaultAppAddress)
-	})
+	t.Run("does not overwrite when APP_ADDRESS is unset", func(t *testing.T) {
+		t.Setenv(AppAddressEnvVar, "")
+		test.That(t, optionsWithAppAddress(nil), test.ShouldBeNil)
 
-	t.Run("skips unreadable files and uses a later config", func(t *testing.T) {
-		opts := optionsWithAppAddress(nil, []string{filepath.Join(dir, "missing.json"), stagingPath})
-		test.That(t, opts.BaseURL, test.ShouldEqual, "https://app.viam.dev:443")
-	})
-
-	t.Run("does not override an existing BaseURL", func(t *testing.T) {
-		opts := optionsWithAppAddress(&app.Options{BaseURL: "https://custom.example:443"}, []string{stagingPath})
+		existing := &app.Options{BaseURL: "https://custom.example:443"}
+		opts := optionsWithAppAddress(existing)
+		test.That(t, opts, test.ShouldEqual, existing)
 		test.That(t, opts.BaseURL, test.ShouldEqual, "https://custom.example:443")
 	})
 }

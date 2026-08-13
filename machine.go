@@ -2,11 +2,8 @@ package vmodutils
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"go.viam.com/rdk/app"
@@ -19,8 +16,8 @@ import (
 	"go.viam.com/utils/rpc"
 )
 
-// defaultAppAddress is used only when cloud.app_address cannot be read from the local viam config.
-const defaultAppAddress = "https://app.viam.com"
+// AppAddressEnvVar can be set in a module's env to target a non-prod app (for example staging).
+const AppAddressEnvVar = "APP_ADDRESS"
 
 func MachineToDependencies(client robot.Robot) (resource.Dependencies, error) {
 	deps := resource.Dependencies{}
@@ -96,70 +93,22 @@ func ConnectToHostFromCLIToken(ctx context.Context, host string, logger logging.
 	)
 }
 
-func defaultViamConfigFilePaths() []string {
-	paths := []string{"/etc/viam.json", `C:\etc\viam.json`}
-	if partID := os.Getenv(utils.MachinePartIDEnvVar); partID != "" {
-		paths = append(paths, filepath.Join(utils.ViamDotDir, fmt.Sprintf("cached_cloud_config_%s.json", partID)))
+func optionsWithAppAddress(options *app.Options) *app.Options {
+	addr := os.Getenv(AppAddressEnvVar)
+	if addr == "" {
+		return options
 	}
-	return paths
-}
-
-func appAddressFromConfigFile(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	var parsed struct {
-		Cloud *struct {
-			AppAddress string `json:"app_address"`
-		} `json:"cloud"`
-	}
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		return "", fmt.Errorf("parse %s: %w", path, err)
-	}
-	if parsed.Cloud == nil || parsed.Cloud.AppAddress == "" {
-		return "", fmt.Errorf("%s: cloud.app_address is missing", path)
-	}
-	return parsed.Cloud.AppAddress, nil
-}
-
-func appAddressFromConfigFiles(paths []string) (string, error) {
-	var errs []error
-	for _, p := range paths {
-		addr, err := appAddressFromConfigFile(p)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		return addr, nil
-	}
-	if len(errs) == 0 {
-		return "", fmt.Errorf("no viam config files to read")
-	}
-	return "", fmt.Errorf("could not read cloud.app_address from viam config: %w", errors.Join(errs...))
-}
-
-func optionsWithAppAddress(options *app.Options, paths []string) *app.Options {
 	if options == nil {
 		options = &app.Options{}
-	}
-	if options.BaseURL != "" {
-		return options
-	}
-	addr, err := appAddressFromConfigFiles(paths)
-	if err != nil {
-		options.BaseURL = defaultAppAddress
-		return options
 	}
 	options.BaseURL = addr
 	return options
 }
 
 // CreateViamClientFromEnvVars creates a ViamClient using module env credentials.
-// The app address is taken from cloud.app_address in the local viam configuration
-// and falls back to prod only if that retrieval fails.
+// If APP_ADDRESS is set, it is used as the app BaseURL; otherwise the SDK default is left unchanged.
 func CreateViamClientFromEnvVars(ctx context.Context, options *app.Options, logger logging.Logger) (*app.ViamClient, error) {
-	return app.CreateViamClientFromEnvVars(ctx, optionsWithAppAddress(options, defaultViamConfigFilePaths()), logger)
+	return app.CreateViamClientFromEnvVars(ctx, optionsWithAppAddress(options), logger)
 }
 
 func UpdateComponentCloudAttributesFromModuleEnv(ctx context.Context, name resource.Name, newAttr utils.AttributeMap, logger logging.Logger) error {

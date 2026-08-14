@@ -296,7 +296,7 @@ function setStatus(text, ok) {
   dot.classList.toggle('on', !!ok);
 }
 
-// ---- credentials: URL params > cookies > form (localStorage) --------------
+// ---- credentials ----------------------------------------------------------
 function cookie(...names) {
   for (const n of names) {
     const m = document.cookie.match(new RegExp('(?:^|; )' + n.replace(/[.$?*|{}()[\]\\/+^]/g, '\\$&') + '=([^;]*)'));
@@ -304,15 +304,53 @@ function cookie(...names) {
   }
   return '';
 }
-function prefillCreds() {
+
+// Resolve machine host + api-key credentials, mirroring rdk's app auth.js order.
+// `fromCookie` is true when creds came from the Viam platform (so we can hide
+// the manual connect widget).
+function resolveCreds() {
+  // 1) URL query params (local testing convenience)
   const q = new URLSearchParams(location.search);
-  const host = q.get('host') || cookie('hostname', 'host') || localStorage.getItem('acd_host') || '';
-  const id = q.get('api-key-id') || q.get('apiKeyId') || cookie('apiKeyId', 'api-key-id') || localStorage.getItem('acd_id') || '';
-  const key = q.get('api-key') || q.get('apiKey') || cookie('apiKey', 'api-key') || localStorage.getItem('acd_key') || '';
-  $('host').value = host;
-  $('apiKeyId').value = id;
-  $('apiKey').value = key;
-  return { host, id, key };
+  const qHost = q.get('host');
+  const qId = q.get('api-key-id') || q.get('apiKeyId');
+  const qKey = q.get('api-key') || q.get('apiKey');
+  if (qHost && qId && qKey) return { host: qHost, id: qId, key: qKey, fromCookie: false };
+
+  // 2) Plain cookies (this module's web.go / older hosting)
+  const cHost = cookie('host'), cId = cookie('api-key-id'), cKey = cookie('api-key');
+  if (cHost && cId && cKey) return { host: cHost, id: cId, key: cKey, fromCookie: true };
+
+  // 3) Viam-hosted single_machine app: /machine/<key>/ + a JSON cookie named <key>
+  //    value = { apiKey:{id,key}, hostname, machineId, ... }
+  const parts = window.location.pathname.split('/');
+  if (parts.length >= 3 && parts[1] === 'machine') {
+    const raw = cookie(decodeURIComponent(parts[2]));
+    if (raw) {
+      try {
+        const p = JSON.parse(raw);
+        const id = p?.apiKey?.id ?? p?.id;
+        const key = p?.apiKey?.key ?? p?.key;
+        const host = p?.hostname;
+        if (host && id && key) return { host, id, key, fromCookie: true };
+      } catch { /* invalid cookie json */ }
+    }
+  }
+
+  // 4) Saved manual input (localStorage)
+  return {
+    host: localStorage.getItem('acd_host') || '',
+    id: localStorage.getItem('acd_id') || '',
+    key: localStorage.getItem('acd_key') || '',
+    fromCookie: false,
+  };
+}
+
+function prefillCreds() {
+  const c = resolveCreds();
+  $('host').value = c.host;
+  $('apiKeyId').value = c.id;
+  $('apiKey').value = c.key;
+  return c;
 }
 
 let client = null;
@@ -741,17 +779,10 @@ window.addEventListener('keydown', (ev) => {
 });
 
 // ---- boot -----------------------------------------------------------------
-// A Viam-hosted app injects credentials via cookies. If those are present,
-// hide the manual connect widget — the user shouldn't have to see/use it.
-function cookieCreds() {
-  const host = cookie('hostname', 'host');
-  const id = cookie('apiKeyId', 'api-key-id');
-  const key = cookie('apiKey', 'api-key');
-  return (host && id && key) ? { host, id, key } : null;
-}
-
+// A Viam-hosted app injects credentials via a cookie. When creds come from a
+// cookie, hide the manual connect widget — the user shouldn't see/use it.
 const creds = prefillCreds();
-if (cookieCreds()) $('connectCard').style.display = 'none';
+if (creds.fromCookie) $('connectCard').style.display = 'none';
 if (creds.host && creds.id && creds.key) connect();
 </script>
 </body>

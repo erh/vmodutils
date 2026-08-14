@@ -16,6 +16,9 @@ import (
 	"go.viam.com/utils/rpc"
 )
 
+// AppAddressEnvVar can be set in a module's env to target a non-prod app (for example staging).
+const AppAddressEnvVar = "APP_ADDRESS"
+
 func MachineToDependencies(client robot.Robot) (resource.Dependencies, error) {
 	deps := resource.Dependencies{}
 
@@ -90,13 +93,31 @@ func ConnectToHostFromCLIToken(ctx context.Context, host string, logger logging.
 	)
 }
 
+func optionsWithAppAddress(options *app.Options) *app.Options {
+	addr := os.Getenv(AppAddressEnvVar)
+	if addr == "" {
+		return options
+	}
+	if options == nil {
+		options = &app.Options{}
+	}
+	options.BaseURL = addr
+	return options
+}
+
+// CreateViamClientFromEnvVars creates a ViamClient using module env credentials.
+// If APP_ADDRESS is set, it is used as the app BaseURL; otherwise the SDK default is left unchanged.
+func CreateViamClientFromEnvVars(ctx context.Context, options *app.Options, logger logging.Logger) (*app.ViamClient, error) {
+	return app.CreateViamClientFromEnvVars(ctx, optionsWithAppAddress(options), logger)
+}
+
 func UpdateComponentCloudAttributesFromModuleEnv(ctx context.Context, name resource.Name, newAttr utils.AttributeMap, logger logging.Logger) error {
 	id := os.Getenv(utils.MachinePartIDEnvVar)
 	if id == "" {
 		return fmt.Errorf("no %s in env", utils.MachinePartIDEnvVar)
 	}
 
-	c, err := app.CreateViamClientFromEnvVars(ctx, nil, logger)
+	c, err := CreateViamClientFromEnvVars(ctx, nil, logger)
 	if err != nil {
 		return err
 	}

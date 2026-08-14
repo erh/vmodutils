@@ -6,8 +6,8 @@ bin/
 module.tar.gz
 touch/foo.pcd
 reload-*
-out.pcd
-rs-color.png
-rs-depth.png
-rs.pcd
+/out.pcd
+/rs-color.png
+/rs-depth.png
+/rs.pcd
 

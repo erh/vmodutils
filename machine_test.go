@@ -270,3 +270,22 @@ func TestGetFragmentId(t *testing.T) {
 		})
 	}
 }
+
+func TestOptionsWithAppAddress(t *testing.T) {
+	t.Run("uses APP_ADDRESS when set", func(t *testing.T) {
+		t.Setenv(AppAddressEnvVar, "https://app.viam.dev:443")
+		opts := optionsWithAppAddress(nil)
+		test.That(t, opts, test.ShouldNotBeNil)
+		test.That(t, opts.BaseURL, test.ShouldEqual, "https://app.viam.dev:443")
+	})
+
+	t.Run("does not overwrite when APP_ADDRESS is unset", func(t *testing.T) {
+		t.Setenv(AppAddressEnvVar, "")
+		test.That(t, optionsWithAppAddress(nil), test.ShouldBeNil)
+
+		existing := &app.Options{BaseURL: "https://custom.example:443"}
+		opts := optionsWithAppAddress(existing)
+		test.That(t, opts, test.ShouldEqual, existing)
+		test.That(t, opts.BaseURL, test.ShouldEqual, "https://custom.example:443")
+	})
+}

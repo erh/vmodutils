@@ -234,6 +234,43 @@
       </div>
     </div>
 
+    <!-- Hand tracking -->
+    <div class="card">
+      <h2>Hand tracking (webcam)</h2>
+      <div class="toggle">
+        <input id="handOn" type="checkbox" />
+        <label for="handOn" style="margin:0">enable — drive the arm with your hand</label>
+      </div>
+      <div id="handStatus" style="font-size:12px;color:var(--muted);margin:8px 0 6px">off</div>
+
+      <div id="handPreviewWrap" style="position:relative;display:none;border:1px solid var(--edge);border-radius:8px;overflow:hidden;background:#000">
+        <video id="handVideo" playsinline muted style="display:block;width:100%;transform:scaleX(-1)"></video>
+        <canvas id="handCanvas" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
+      </div>
+
+      <button id="driveBtn" class="primary" style="width:100%;margin-top:8px;display:none">HOLD TO DRIVE (or hold Space)</button>
+      <div id="handDelta" style="font-family:ui-monospace,monospace;font-size:11px;color:var(--accent2);margin-top:6px"></div>
+
+      <div id="handTuning" style="display:none">
+        <label>Max step (mm) <span id="handMaxV">15</span></label>
+        <input id="handMax" type="range" min="1" max="40" value="15" style="width:100%" />
+        <label>Dead-zone <span id="handDzV">0.04</span></label>
+        <input id="handDz" type="range" min="0" max="0.2" step="0.005" value="0.04" style="width:100%" />
+        <label>Depth gain <span id="handDgV">1.5</span></label>
+        <input id="handDg" type="range" min="0" max="4" step="0.1" value="1.5" style="width:100%" />
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px">
+          <label class="toggle" style="margin:0"><input id="handInvX" type="checkbox" /> invert X</label>
+          <label class="toggle" style="margin:0"><input id="handInvY" type="checkbox" /> invert Y</label>
+          <label class="toggle" style="margin:0"><input id="handInvZ" type="checkbox" /> invert depth</label>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px">
+          Hold the button (or Space) with your hand at rest to set neutral, then move your hand:
+          left/right &amp; up/down → strafe &amp; up/down, toward/away → forward/back, pinch → gripper.
+          Release to stop.
+        </div>
+      </div>
+    </div>
+
     <!-- Log -->
     <div class="card">
       <h2>Activity</h2>
@@ -468,9 +505,12 @@ function detectGripper() {
   }
 }
 
+let gripperBusy = false;
 async function gripperDo(action) {
   const name = $('gripperSel').value;
   if (!client || !name) { log('⚠ no gripper'); return; }
+  if (gripperBusy) return;                 // ignore overlapping commands (pinch spam)
+  gripperBusy = true;
   try {
     const g = new VIAM.GripperClient(client, name);
     log(`gripper(${name}).${action} …`);
@@ -480,6 +520,8 @@ async function gripperDo(action) {
     log(`  gripper ${action} ✓`);
   } catch (e) {
     log(`  gripper ${action} ✗ ${e?.message || e}`);
+  } finally {
+    gripperBusy = false;
   }
 }
 
@@ -633,11 +675,12 @@ function setBusy(on, label) {
   setStatus(on ? `moving: ${label}…` : 'connected', true);
 }
 
-// delta = { trans:[dx,dy,dz], rot:{w,x,y,z} } expressed in the CAMERA's own frame.
-// We read the current camera world pose, apply the delta in that frame, and
-// command the resulting ABSOLUTE pose (referenceFrame "world"). Translations
+// delta = { trans:[dx,dy,dz], rot:{w,x,y,z} }. With frame 'camera' (default) the
+// translation is in the camera's own frame; with frame 'world' it is already in
+// world axes. Either way we read the current camera world pose, apply the delta,
+// and command the resulting ABSOLUTE pose (referenceFrame "world"). Translations
 // keep the exact current orientation; rotations compose about the camera axes.
-async function jog(delta, label) {
+async function jog(delta, label, frame = 'camera') {
   if (!cameraName) { log('⚠ no camera selected — pick one first'); return; }
   if (!motion)     { log('⚠ no motion service selected'); return; }
   if (inFlight)    { log(`busy (still planning previous move) — ignoring ${label}`); return; }
@@ -653,8 +696,9 @@ async function jog(delta, label) {
 
   // current orientation as a quaternion (camera-local -> world)
   const qCur = ovToQuat(cur.oX, cur.oY, cur.oZ, cur.theta);
-  // translation delta is in the camera frame -> rotate into world
-  const dW = qRotate(qCur, delta.trans);
+  // translation delta -> world. 'world' frame is already world axes; 'camera'
+  // frame gets rotated by the current orientation.
+  const dW = frame === 'world' ? delta.trans.slice() : qRotate(qCur, delta.trans);
   const rot = delta.rot || QI;
   const isRot = !(rot.w === 1 && rot.x === 0 && rot.y === 0 && rot.z === 0);
   // rotate in the camera's LOCAL frame => right-multiply
@@ -737,6 +781,163 @@ function doMove(move) {
   if (d) jog(d, LABELS[move] || move);
 }
 
+// ---- hand tracking (webcam -> rate-control jog) ---------------------------
+// Drives the arm in the camera frame from the operator's hand: hand offset from
+// a neutral point (captured when the deadman engages) sets direction+speed.
+// Reuses jog() and gripperDo(); only emits while the deadman is held.
+let handLandmarker = null, handStream = null, handRAF = 0, handEnabled = false;
+let engaged = false, neutral = null, gripClosed = false;
+let hand = { present: false, mx: 0, y: 0, span: 0, pinch: 0 };
+
+const HV = () => $('handVideo');
+function handStatus(t) { $('handStatus').textContent = t; }
+function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0)); }
+
+async function enableHand(on) {
+  if (on) {
+    try {
+      handStatus('requesting webcam…');
+      handStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      const v = HV();
+      v.srcObject = handStream;
+      await v.play();
+      handStatus('loading hand model…');
+      if (!handLandmarker) {
+        const { FilesetResolver, HandLandmarker } =
+          await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.mjs');
+        const vision = await FilesetResolver.forVisionTasks(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm');
+        handLandmarker = await HandLandmarker.createFromOptions(vision, {
+          baseOptions: { modelAssetPath:
+            'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task' },
+          runningMode: 'VIDEO', numHands: 1,
+        });
+      }
+      handEnabled = true;
+      $('handPreviewWrap').style.display = '';
+      $('handTuning').style.display = '';
+      $('driveBtn').style.display = '';
+      handStatus('ready — hold the button (or Space) to drive');
+      log('hand tracking on');
+      handLoop();
+    } catch (e) {
+      handStatus('failed: ' + (e?.message || e));
+      log('hand tracking ✗ ' + (e?.message || e));
+      $('handOn').checked = false;
+      enableHand(false);
+    }
+  } else {
+    handEnabled = false; engaged = false; neutral = null;
+    if (handRAF) cancelAnimationFrame(handRAF), handRAF = 0;
+    if (handStream) { handStream.getTracks().forEach(t => t.stop()); handStream = null; }
+    $('handPreviewWrap').style.display = 'none';
+    $('handTuning').style.display = 'none';
+    $('driveBtn').style.display = 'none';
+    $('handDelta').textContent = '';
+    handStatus('off');
+  }
+}
+
+function updateHand(res) {
+  const lms = res && res.landmarks && res.landmarks[0];
+  if (!lms) { hand.present = false; return; }
+  const palm = lms[9], wrist = lms[0];        // middle-finger MCP as palm point
+  hand = {
+    present: true,
+    mx: 1 - palm.x,                            // mirror x to match the selfie preview
+    y: palm.y,
+    span: dist(wrist, palm),                   // depth proxy: bigger = closer
+    pinch: dist(lms[4], lms[8]),               // thumb tip <-> index tip
+  };
+  if (engaged && !neutral) captureNeutral();   // hand appeared after engaging
+}
+
+function captureNeutral() {
+  if (!hand.present) { neutral = null; return; }
+  neutral = { mx: hand.mx, y: hand.y, span: hand.span };
+  gripClosed = hand.pinch < PINCH_CLOSE;       // seed state; don't fire on the engage frame
+}
+
+function drawOverlay(res) {
+  const c = $('handCanvas'), v = HV();
+  if (!v.videoWidth) return;
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, c.width, c.height);
+  const lms = res && res.landmarks && res.landmarks[0];
+  if (!lms) return;
+  g.fillStyle = engaged ? '#33c48d' : '#4c8bf5';
+  for (const p of lms) g.beginPath(), g.arc((1 - p.x) * c.width, p.y * c.height, 4, 0, 7), g.fill();
+  if (neutral) {                               // neutral dot + offset vector
+    const nx = neutral.mx * c.width, ny = neutral.y * c.height;
+    const hx = hand.mx * c.width, hy = hand.y * c.height;
+    g.strokeStyle = '#e5b54b'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(nx, ny); g.lineTo(hx, hy); g.stroke();
+    g.fillStyle = '#e5b54b'; g.beginPath(); g.arc(nx, ny, 5, 0, 7); g.fill();
+  }
+}
+
+// normalized offset -> [-1,1] with dead-zone and a per-axis full-scale
+function ramp(off, fullscale) {
+  const dz = parseFloat($('handDz').value) || 0;
+  const a = Math.abs(off);
+  if (a <= dz) return 0;
+  return Math.sign(off) * Math.min(1, (a - dz) / Math.max(1e-3, fullscale - dz));
+}
+const clamp = (v, m) => Math.max(-m, Math.min(m, v));
+
+// Pinch is noisy near a single threshold, so use hysteresis: only CLOSE when it
+// drops below PINCH_CLOSE, only OPEN when it rises above PINCH_OPEN. gripperDo's
+// own busy guard prevents overlapping commands.
+const PINCH_CLOSE = 0.04, PINCH_OPEN = 0.09;
+function pump() {
+  if (!engaged || !hand.present || !neutral) { return; }
+  // pinch -> gripper (hysteresis + edge-triggered)
+  if (gripClosed && hand.pinch > PINCH_OPEN) {
+    gripClosed = false; if ($('gripperSel').value) gripperDo('open');
+  } else if (!gripClosed && hand.pinch < PINCH_CLOSE) {
+    gripClosed = true; if ($('gripperSel').value) gripperDo('close');
+  }
+  if (inFlight) return;                         // one move at a time (rate loop)
+
+  // Map the hand offset to WORLD axes (not the camera frame):
+  //   hand right -> +X, hand up -> +Z, hand toward webcam -> +Y.
+  const maxS = parseFloat($('handMax').value) || 0;
+  const dg = parseFloat($('handDg').value) || 0;
+  const sx = $('handInvX').checked ? -1 : 1;
+  const sy = $('handInvY').checked ? -1 : 1;   // vertical
+  const sz = $('handInvZ').checked ? -1 : 1;   // depth
+  const wx = clamp(ramp(hand.mx - neutral.mx, 0.22) * maxS * sx, maxS);          // world X (right)
+  const wz = clamp(ramp(-(hand.y - neutral.y), 0.22) * maxS * sy, maxS);         // world Z (up)
+  const wy = clamp(ramp(hand.span - neutral.span, 0.12) * maxS * dg * sz, maxS); // world Y (depth)
+  $('handDelta').textContent = `Δworld x${wx.toFixed(1)} y${wy.toFixed(1)} z${wz.toFixed(1)} mm`;
+  if (Math.hypot(wx, wy, wz) < 0.1) return;     // inside dead-zone -> hold still
+  jog({ trans: [wx, wy, wz], rot: QI }, 'hand', 'world');
+}
+
+function handLoop() {
+  if (!handEnabled) return;
+  const v = HV();
+  if (handLandmarker && v.readyState >= 2) {
+    try {
+      const res = handLandmarker.detectForVideo(v, performance.now());
+      updateHand(res);
+      drawOverlay(res);
+      pump();
+    } catch (e) { /* transient detect errors are non-fatal */ }
+  }
+  handRAF = requestAnimationFrame(handLoop);
+}
+
+function setEngaged(on) {
+  if (on === engaged) return;
+  engaged = on;
+  if (on) { captureNeutral(); handStatus('DRIVING'); }
+  else { neutral = null; $('handDelta').textContent = ''; handStatus('ready — hold to drive'); }
+  $('driveBtn').classList.toggle('primary', !on);
+  $('driveBtn').textContent = on ? '● DRIVING — release to stop' : 'HOLD TO DRIVE (or hold Space)';
+}
+
 // ---- wiring ---------------------------------------------------------------
 $('connectBtn').addEventListener('click', connect);
 $('cameraSel').addEventListener('change', (e) => {
@@ -763,6 +964,24 @@ $('gripCloseBtn').addEventListener('click', () => gripperDo('close'));
 $('gripStopBtn').addEventListener('click', () => gripperDo('stop'));
 document.querySelectorAll('[data-move]').forEach(btn =>
   btn.addEventListener('click', () => doMove(btn.dataset.move)));
+
+// hand tracking
+$('handOn').addEventListener('change', (e) => enableHand(e.target.checked));
+for (const [id, v] of [['handMax', 'handMaxV'], ['handDz', 'handDzV'], ['handDg', 'handDgV']])
+  $(id).addEventListener('input', (e) => { $(v).textContent = e.target.value; });
+// deadman: pressed = drive, release = stop (also stop if pointer/focus leaves)
+const db = $('driveBtn');
+db.addEventListener('pointerdown', (e) => { e.preventDefault(); setEngaged(true); });
+for (const ev of ['pointerup', 'pointerleave', 'pointercancel'])
+  db.addEventListener(ev, () => setEngaged(false));
+window.addEventListener('keydown', (ev) => {
+  if (ev.code === 'Space' && handEnabled) { ev.preventDefault(); setEngaged(true); }
+});
+window.addEventListener('keyup', (ev) => {
+  if (ev.code === 'Space' && handEnabled) { ev.preventDefault(); setEngaged(false); }
+});
+window.addEventListener('blur', () => setEngaged(false));            // safety: never leave it armed
+document.addEventListener('visibilitychange', () => { if (document.hidden) setEngaged(false); });
 
 const KEYMAP = {
   w: 'fwd', s: 'back', a: 'left', d: 'right', r: 'up', f: 'down',

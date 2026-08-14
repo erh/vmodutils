@@ -539,6 +539,18 @@ Translations use the Viam camera convention: **+Z forward** (out of the lens), *
 | Look up / down (pitch) | Look up / down | `↑` / `↓` |
 | Yaw left / right | Yaw ◀ / ▶ | `←` / `→` |
 
+### Hand-tracking mode
+
+Optionally drive the arm with your **webcam** instead of buttons. Enable **Hand tracking**, grant camera access (this loads Google's MediaPipe hand model from a CDN), and a preview with hand landmarks appears.
+
+It uses **rate control** with a **hold-to-engage deadman**: press and hold the **HOLD TO DRIVE** button (or **Space**) to set a neutral point at your hand's current position, then move your hand — its offset from neutral sets the direction and speed of a camera-frame move:
+
+- left / right / up / down → strafe & up/down,
+- toward / away from the webcam → forward / back,
+- **pinch** (thumb + index) → close the gripper, open hand → open it (if a gripper is on the arm).
+
+Release the button/Space to stop immediately. Sliders tune max step (mm), dead-zone, and depth gain; per-axis invert checkboxes handle webcam/mount orientation. Motion reuses the same camera-frame path (and the same joint-limit safeguards) as the manual controls.
+
 ### Running it
 
 When deployed as a Viam application, open the hosted app for your machine — the platform injects the machine host and API key, so it connects automatically.

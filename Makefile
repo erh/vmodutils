@@ -1,5 +1,5 @@
 
-bin/vmodutils: bin *.go cmd/module/*.go *.mod touch/*.go meta.json
+bin/vmodutils: bin *.go cmd/module/*.go *.mod touch/*.go meta.json app-arm-control/index.html
 	go build -o bin/vmodutils cmd/module/cmd.go
 
 test:
@@ -13,7 +13,7 @@ update:
 	go mod tidy
 
 module: bin/vmodutils test
-	tar czf module.tar.gz bin/vmodutils meta.json
+	tar czf module.tar.gz bin/vmodutils meta.json app-arm-control
 
 bin:
 	-mkdir bin

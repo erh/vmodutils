@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Arm Control</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --edge: #262b36;
+    --fg: #e6e9ef;
+    --muted: #8b93a3;
+    --accent: #4c8bf5;
+    --accent2: #33c48d;
+    --danger: #e5534b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    padding: 10px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--edge);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  #status {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #dot { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); }
+  #dot.on { background: var(--accent2); }
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 16px;
+    padding: 16px;
+    min-height: 0;
+  }
+  .stage {
+    background: #000;
+    border: 1px solid var(--edge);
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 320px;
+  }
+  #video { max-width: 100%; max-height: 100%; display: block; }
+  #videoHint {
+    position: absolute;
+    color: var(--muted);
+    font-size: 13px;
+    pointer-events: none;
+  }
+  .side { display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--edge);
+    border-radius: 10px;
+    padding: 12px;
+  }
+  .card h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 0 0 10px;
+  }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+  select, input[type="text"], input[type="password"], input[type="number"] {
+    width: 100%;
+    background: #0d0f14;
+    border: 1px solid var(--edge);
+    color: var(--fg);
+    border-radius: 7px;
+    padding: 7px 9px;
+    font-size: 13px;
+  }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  button {
+    background: var(--edge);
+    color: var(--fg);
+    border: 1px solid #333a48;
+    border-radius: 8px;
+    padding: 9px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    user-select: none;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:active:not(:disabled) { background: var(--accent); border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .pad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .pad button { padding: 12px 4px; font-size: 13px; }
+  .pad .k { display: block; font-size: 10px; color: var(--muted); margin-top: 3px; }
+  .pad button:active .k { color: #fff; }
+  .spacer { visibility: hidden; }
+  .steps { display: flex; gap: 8px; }
+  .steps > div { flex: 1; }
+  .toggle { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--muted); font-size: 12px; }
+  .toggle input { width: auto; }
+  #log {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    color: var(--muted);
+    white-space: pre-wrap;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  #pose { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--accent2); }
+  .controls[disabled-group] { opacity: 0.4; pointer-events: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎮 Arm Control</h1>
+  <span style="color:var(--muted);font-size:12px">drive an arm in the frame of its camera</span>
+  <div id="status"><span id="dot"></span><span id="statusText">not connected</span></div>
+</header>
+
+<main>
+  <div class="stage">
+    <img id="video" alt="" hidden />
+    <div id="videoHint">connect and pick a camera to see the feed</div>
+  </div>
+
+  <div class="side">
+    <!-- Connection -->
+    <div class="card" id="connectCard">
+      <h2>Connection</h2>
+      <label>Machine address (host)</label>
+      <input id="host" type="text" placeholder="my-machine.abcd1234.viam.cloud" />
+      <label>API key ID</label>
+      <input id="apiKeyId" type="text" placeholder="key id" />
+      <label>API key</label>
+      <input id="apiKey" type="password" placeholder="key secret" />
+      <div style="height:8px"></div>
+      <button id="connectBtn" class="primary">Connect</button>
+    </div>
+
+    <!-- Resources -->
+    <div class="card">
+      <h2>Resources</h2>
+      <label>Camera (mounted on arm)</label>
+      <select id="cameraSel"><option value="">—</option></select>
+      <label>Motion service</label>
+      <select id="motionSel"><option value="builtin">builtin</option></select>
+      <div class="toggle">
+        <input id="videoOn" type="checkbox" checked />
+        <label for="videoOn" style="margin:0">stream video (1 fps)</label>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin:8px 0 4px">
+        <label style="margin:0">Camera world pose</label>
+        <button id="syncBtn" style="padding:2px 8px;font-size:11px">Sync</button>
+      </div>
+      <div id="pose">—</div>
+      <div class="toggle">
+        <input id="verifyPose" type="checkbox" />
+        <label for="verifyPose" style="margin:0">verify pose after move (slow — extra getPose)</label>
+      </div>
+    </div>
+
+    <!-- Gripper (shown only if one is on the camera's arm) -->
+    <div class="card" id="gripperCard" style="display:none">
+      <h2>Gripper</h2>
+      <select id="gripperSel"></select>
+      <div class="row" style="margin-top:8px">
+        <button id="gripOpenBtn">Open</button>
+        <button id="gripCloseBtn">Close</button>
+        <button id="gripStopBtn">Stop</button>
+      </div>
+    </div>
+
+    <!-- Arm recovery -->
+    <div class="card">
+      <h2>Arm (recovery)</h2>
+      <label>Arm</label>
+      <select id="armSel"><option value="">—</option></select>
+      <div class="row" style="margin-top:8px">
+        <button id="clearErrBtn">Clear error</button>
+        <button id="getErrBtn">Get error</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="manualOnBtn">Manual mode ON</button>
+        <button id="manualOffBtn">Manual OFF</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px">
+        After a joint-limit fault: <b>Clear error</b>, then jog the opposite
+        direction — or use <b>Manual mode</b> to hand-move the arm off the limit
+        (turn it OFF before jogging again).
+      </div>
+    </div>
+
+    <!-- Steps -->
+    <div class="card">
+      <h2>Step size</h2>
+      <div class="steps">
+        <div>
+          <label>Translate (mm)</label>
+          <input id="transStep" type="number" value="10" min="0.1" step="1" />
+        </div>
+        <div>
+          <label>Rotate (deg)</label>
+          <input id="rotStep" type="number" value="5" min="0.1" step="1" />
+        </div>
+      </div>
+      <div class="toggle">
+        <input id="invertFwd" type="checkbox" />
+        <label for="invertFwd" style="margin:0">invert forward axis (camera looks along −Z)</label>
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div class="card">
+      <h2>Activity</h2>
+      <div id="log"></div>
+    </div>
+  </div>
+</main>
+
+<!-- Translation + orientation control pads sit under the video on narrow layouts -->
+<div class="card controls" id="controls" style="margin:0 16px 16px;opacity:0.4;pointer-events:none">
+  <h2>Controls — translate (camera frame) &nbsp;·&nbsp; orient (re-aim / twist)</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <!-- translate -->
+    <div class="pad">
+      <span class="spacer"></span>
+      <button data-move="fwd">Forward<span class="k">W</span></button>
+      <span class="spacer"></span>
+
+      <button data-move="left">Strafe ◀<span class="k">A</span></button>
+      <button data-move="back">Back<span class="k">S</span></button>
+      <button data-move="right">Strafe ▶<span class="k">D</span></button>
+
+      <button data-move="up">Up<span class="k">R</span></button>
+      <button data-move="down">Down<span class="k">F</span></button>
+      <span class="spacer"></span>
+    </div>
+    <!-- orient -->
+    <div class="pad">
+      <span class="spacer"></span>
+      <button data-move="pitchUp">Look up<span class="k">↑</span></button>
+      <span class="spacer"></span>
+
+      <button data-move="yawLeft">Yaw ◀<span class="k">←</span></button>
+      <button data-move="pitchDown">Look down<span class="k">↓</span></button>
+      <button data-move="yawRight">Yaw ▶<span class="k">→</span></button>
+
+      <button data-move="twistCCW">Twist ↺<span class="k">Q</span></button>
+      <span class="spacer"></span>
+      <button data-move="twistCW">Twist ↻<span class="k">E</span></button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import * as VIAM from 'https://esm.sh/@viamrobotics/sdk@0.74.2';
+
+const $ = (id) => document.getElementById(id);
+const dot = $('dot'), statusText = $('statusText');
+const logEl = $('log');
+
+const T0 = performance.now();
+function log(msg) {
+  const ms = (performance.now() - T0).toFixed(0);
+  const line = `[+${ms}ms] ${msg}`;
+  logEl.textContent = line + '\n' + logEl.textContent;
+  console.log(line);
+}
+function setStatus(text, ok) {
+  statusText.textContent = text;
+  dot.classList.toggle('on', !!ok);
+}
+
+// ---- credentials: URL params > cookies > form (localStorage) --------------
+function cookie(...names) {
+  for (const n of names) {
+    const m = document.cookie.match(new RegExp('(?:^|; )' + n.replace(/[.$?*|{}()[\]\\/+^]/g, '\\$&') + '=([^;]*)'));
+    if (m) return decodeURIComponent(m[1]);
+  }
+  return '';
+}
+function prefillCreds() {
+  const q = new URLSearchParams(location.search);
+  const host = q.get('host') || cookie('hostname', 'host') || localStorage.getItem('acd_host') || '';
+  const id = q.get('api-key-id') || q.get('apiKeyId') || cookie('apiKeyId', 'api-key-id') || localStorage.getItem('acd_id') || '';
+  const key = q.get('api-key') || q.get('apiKey') || cookie('apiKey', 'api-key') || localStorage.getItem('acd_key') || '';
+  $('host').value = host;
+  $('apiKeyId').value = id;
+  $('apiKey').value = key;
+  return { host, id, key };
+}
+
+let client = null;
+let motion = null;
+let cameraName = '';
+let videoTimer = null;
+let lastObjUrl = null;
+let inFlight = false;
+let armNames = [];       // arm component short names
+let gripperNames = [];   // gripper component short names
+let fsParent = {};       // frame system: frame name -> parent frame name
+
+async function connect() {
+  const host = $('host').value.trim();
+  const id = $('apiKeyId').value.trim();
+  const key = $('apiKey').value.trim();
+  if (!host || !id || !key) { log('need host, api key id, and api key'); return; }
+
+  localStorage.setItem('acd_host', host);
+  localStorage.setItem('acd_id', id);
+  localStorage.setItem('acd_key', key);
+
+  setStatus('connecting…', false);
+  $('connectBtn').disabled = true;
+  try {
+    client = await VIAM.createRobotClient({
+      host,
+      credentials: { type: 'api-key', authEntity: id, payload: key },
+      signalingAddress: 'https://app.viam.com:443',
+    });
+    setStatus('connected', true);
+    log('connected to ' + host);
+    await populateResources();
+    document.querySelectorAll('#controls, .controls').forEach(el => {
+      el.style.opacity = '1';
+      el.style.pointerEvents = 'auto';
+    });
+  } catch (e) {
+    setStatus('connection failed', false);
+    log('connect error: ' + (e?.message || e));
+  } finally {
+    $('connectBtn').disabled = false;
+  }
+}
+
+async function populateResources() {
+  const names = await client.resourceNames();
+  log('resourceNames: ' + JSON.stringify(names.map(n => `${n.type}:${n.subtype}/${n.name}`)));
+  const cams = names.filter(n => n.subtype === 'camera' && n.type === 'component');
+  const motions = names.filter(n => n.subtype === 'motion' && n.type === 'service');
+
+  const cs = $('cameraSel');
+  cs.innerHTML = '<option value="">—</option>';
+  for (const c of cams) cs.add(new Option(c.name, c.name));
+
+  const ms = $('motionSel');
+  ms.innerHTML = '';
+  if (motions.length === 0) ms.add(new Option('builtin', 'builtin'));
+  for (const m of motions) ms.add(new Option(m.name, m.name));
+
+  const arms = names.filter(n => n.subtype === 'arm' && n.type === 'component');
+  armNames = arms.map(a => a.name);
+  const as = $('armSel');
+  as.innerHTML = '<option value="">—</option>';
+  for (const a of arms) as.add(new Option(a.name, a.name));
+  if (arms.length === 1) as.value = arms[0].name;   // auto-pick the only arm
+
+  gripperNames = names.filter(n => n.subtype === 'gripper' && n.type === 'component').map(g => g.name);
+
+  log(`found ${cams.length} camera(s), ${motions.length} motion service(s), ${arms.length} arm(s), ${gripperNames.length} gripper(s)`);
+  useMotion(ms.value);
+
+  // frame system parent map, used to tell which gripper shares the camera's arm
+  try {
+    const fsc = await client.frameSystemConfig([]);
+    fsParent = {};
+    for (const c of fsc) {
+      const name = c.frame?.referenceFrame;
+      const parent = c.frame?.poseInObserverFrame?.referenceFrame;
+      if (name) fsParent[name] = parent || 'world';
+    }
+    log('frame system: ' + JSON.stringify(fsParent));
+  } catch (e) {
+    fsParent = {};
+    log('frameSystemConfig ✗ ' + (e?.message || e));
+  }
+}
+
+// walk the frame system from a frame up to world
+function ancestors(name) {
+  const out = [];
+  let cur = name, guard = 0;
+  while (cur && cur !== 'world' && guard++ < 50) { out.push(cur); cur = fsParent[cur]; }
+  return out;
+}
+
+// show Open/Close only for grippers sharing the selected camera's arm
+function detectGripper() {
+  const sel = $('gripperSel');
+  const card = $('gripperCard');
+  sel.innerHTML = '';
+  let found = [];
+  if (cameraName && Object.keys(fsParent).length) {
+    const camArm = ancestors(cameraName).find(f => armNames.includes(f));
+    if (camArm) found = gripperNames.filter(g => ancestors(g).includes(camArm));
+    if (camArm) log(`camera ${cameraName} is on arm ${camArm}`);
+  }
+  if (found.length) {
+    for (const g of found) sel.add(new Option(g, g));
+    card.style.display = '';
+    log(`gripper(s) on that arm: ${JSON.stringify(found)}`);
+  } else {
+    card.style.display = 'none';
+    if (cameraName) log('no gripper found on the camera\'s arm');
+  }
+}
+
+async function gripperDo(action) {
+  const name = $('gripperSel').value;
+  if (!client || !name) { log('⚠ no gripper'); return; }
+  try {
+    const g = new VIAM.GripperClient(client, name);
+    log(`gripper(${name}).${action} …`);
+    if (action === 'open') await g.open();
+    else if (action === 'close') await g.grab();
+    else await g.stop();
+    log(`  gripper ${action} ✓`);
+  } catch (e) {
+    log(`  gripper ${action} ✗ ${e?.message || e}`);
+  }
+}
+
+// run a DoCommand on the selected arm (xArm recovery: clear_error/get_error/manual mode)
+async function armDo(cmd, label) {
+  const name = $('armSel').value;
+  if (!client || !name) { log('⚠ no arm selected'); return; }
+  try {
+    log(`arm(${name}).doCommand ${JSON.stringify(cmd)} …`);
+    const resp = await new VIAM.ArmClient(client, name).doCommand(cmd);
+    log(`  ${label} ← ${JSON.stringify(resp)}`);
+  } catch (e) {
+    log(`  ${label} ✗ ${e?.message || e}`);
+  }
+}
+
+function useMotion(name) {
+  if (!client || !name) return;
+  motion = new VIAM.MotionClient(client, name);
+  log('motion service: ' + name);
+}
+
+// ---- video feed -----------------------------------------------------------
+function stopVideo() {
+  if (videoTimer) { clearInterval(videoTimer); videoTimer = null; }
+}
+async function pollFrame() {
+  if (!client || !cameraName) return;
+  if (inFlight) return;   // don't compete with a move/getPose for the channel
+  if (!$('videoOn').checked) return;
+  try {
+    const cam = new VIAM.CameraClient(client, cameraName);
+    const { images } = await cam.getImages();
+    if (!images || !images.length) return;
+    const img = images.find(i => /jpeg|png/.test(i.mimeType)) || images[0];
+    const blob = new Blob([img.image], { type: img.mimeType || 'image/jpeg' });
+    const url = URL.createObjectURL(blob);
+    const v = $('video');
+    v.src = url;
+    v.hidden = false;
+    $('videoHint').style.display = 'none';
+    if (lastObjUrl) URL.revokeObjectURL(lastObjUrl);
+    lastObjUrl = url;
+  } catch (e) {
+    log('video error: ' + (e?.message || e));
+  }
+}
+function startVideo() {
+  stopVideo();
+  if (!cameraName) return;
+  pollFrame();
+  videoTimer = setInterval(pollFrame, 1000); // 1 fps
+}
+
+// ---- jogging: relative move expressed in the camera's own frame -----------
+// pose defaults to identity orientation (oZ:1, theta:0), zero translation.
+let reqN = 0;
+
+function fmtPose(p) {
+  return `x${p.x.toFixed(1)} y${p.y.toFixed(1)} z${p.z.toFixed(1)} ` +
+         `oX${p.oX.toFixed(3)} oY${p.oY.toFixed(3)} oZ${p.oZ.toFixed(3)} θ${p.theta.toFixed(1)}`;
+}
+
+// ---- quaternion + orientation-vector math (ports go.viam.com/rdk spatialmath) ----
+// Quaternions are {w,x,y,z}. Orientation vectors match Viam's Pose {oX,oY,oZ,theta°}.
+const D2R = Math.PI / 180, R2D = 180 / Math.PI, POLE = 0.0001, EPS = 1e-4;
+const QI = { w: 1, x: 0, y: 0, z: 0 };
+function qMul(a, b) {
+  return {
+    w: a.w*b.w - a.x*b.x - a.y*b.y - a.z*b.z,
+    x: a.w*b.x + a.x*b.w + a.y*b.z - a.z*b.y,
+    y: a.w*b.y - a.x*b.z + a.y*b.w + a.z*b.x,
+    z: a.w*b.z + a.x*b.y - a.y*b.x + a.z*b.w,
+  };
+}
+const qConj = (q) => ({ w: q.w, x: -q.x, y: -q.y, z: -q.z });
+function qAxisAngle(ax, ay, az, ang) {   // ang in radians, axis assumed unit
+  const h = ang / 2, s = Math.sin(h);
+  return { w: Math.cos(h), x: ax*s, y: ay*s, z: az*s };
+}
+function qRotate(q, v) {                  // rotate vector v=[x,y,z] by q
+  const r = qMul(qMul(q, { w: 0, x: v[0], y: v[1], z: v[2] }), qConj(q));
+  return [r.x, r.y, r.z];
+}
+// OrientationVector(deg) -> quaternion.  Viam: ZYZ Euler(lon, lat, theta).
+function ovToQuat(oX, oY, oZ, thetaDeg) {
+  const n = Math.hypot(oX, oY, oZ) || 1; oX/=n; oY/=n; oZ/=n;
+  const lat = Math.acos(Math.max(-1, Math.min(1, oZ)));
+  let lon = 0;
+  if (1 - Math.abs(oZ) > EPS) lon = Math.atan2(oY, oX);
+  return qMul(qMul(qAxisAngle(0,0,1, lon), qAxisAngle(0,1,0, lat)),
+              qAxisAngle(0,0,1, thetaDeg * D2R));
+}
+// quaternion -> OrientationVector(deg).  Direct port of rdk QuatToOV.
+function quatToOV(q) {
+  const cross = (a,b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+  const dot = (a,b) => a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+  const len = (a) => Math.hypot(a[0],a[1],a[2]);
+  const newX = qRotate(q, [-1, 0, 0]);   // Viam reference axes are -X and +Z
+  const newZ = qRotate(q, [ 0, 0, 1]);
+  const ov = { oX: newZ[0], oY: newZ[1], oZ: newZ[2], theta: 0 };
+  if (1 - Math.abs(newZ[2]) > POLE) {
+    const norm1 = cross(newZ, newX);
+    const norm2 = cross(newZ, [0, 0, 1]);
+    let cosTheta = dot(norm1, norm2) / (len(norm1) * len(norm2));
+    cosTheta = Math.max(-1, Math.min(1, cosTheta));
+    const theta = Math.acos(cosTheta);
+    if (theta > POLE) {
+      const testZ = qRotate(qAxisAngle(ov.oX, ov.oY, ov.oZ, -theta), [0, 0, 1]);
+      const norm3 = cross(newZ, testZ);
+      const cosTest = dot(norm1, norm3) / (len(norm1) * len(norm3));
+      ov.theta = (1 - cosTest < EPS*EPS) ? -theta : theta;
+    }
+  } else {
+    ov.theta = (newZ[2] < 0) ? -Math.atan2(newX[1], newX[0])
+                             : -Math.atan2(newX[1], -newX[0]);
+  }
+  ov.theta *= R2D;
+  if (ov.theta === -0) ov.theta = 0;
+  return ov;
+}
+
+// Cached camera world pose. This app is the ONLY mover, so after a successful
+// move we know the new pose is the target we just commanded — no need to read
+// it back. getPose (a slow live joint read on the server) is only used to
+// (re)sync from hardware on demand: camera change, after manual mode, etc.
+let curPose = null;
+
+function setPose(p, tag) {
+  curPose = p;
+  if (p) $('pose').textContent = fmtPose(p);
+  if (p && tag) log(`  ${tag} world(${cameraName}): ${fmtPose(p)}`);
+}
+
+// Authoritative read from hardware (slow). Updates the cache.
+async function syncPose(tag) {
+  if (!client || !cameraName) return null;
+  try {
+    const pif = await client.getPose(cameraName, 'world', []);
+    setPose(pif.pose, tag);
+    return curPose;
+  } catch (e) {
+    log(`  getPose(${cameraName},world) ✗ ${e?.message || e}`);
+    return null;
+  }
+}
+
+function setBusy(on, label) {
+  inFlight = on;
+  document.querySelectorAll('[data-move]').forEach(b => b.disabled = on);
+  setStatus(on ? `moving: ${label}…` : 'connected', true);
+}
+
+// delta = { trans:[dx,dy,dz], rot:{w,x,y,z} } expressed in the CAMERA's own frame.
+// We read the current camera world pose, apply the delta in that frame, and
+// command the resulting ABSOLUTE pose (referenceFrame "world"). Translations
+// keep the exact current orientation; rotations compose about the camera axes.
+async function jog(delta, label) {
+  if (!cameraName) { log('⚠ no camera selected — pick one first'); return; }
+  if (!motion)     { log('⚠ no motion service selected'); return; }
+  if (inFlight)    { log(`busy (still planning previous move) — ignoring ${label}`); return; }
+  setBusy(true, label);
+  const n = ++reqN;
+  const tPress = performance.now();
+  // Use the cached pose; only hit hardware if we don't have one yet.
+  let cur = curPose;
+  const synced = !cur;
+  if (!cur) cur = await syncPose('current');
+  const tBefore = performance.now();
+  if (!cur) { log(`#${n} ${label} ✗ could not read current camera pose`); setBusy(false); return; }
+
+  // current orientation as a quaternion (camera-local -> world)
+  const qCur = ovToQuat(cur.oX, cur.oY, cur.oZ, cur.theta);
+  // translation delta is in the camera frame -> rotate into world
+  const dW = qRotate(qCur, delta.trans);
+  const rot = delta.rot || QI;
+  const isRot = !(rot.w === 1 && rot.x === 0 && rot.y === 0 && rot.z === 0);
+  // rotate in the camera's LOCAL frame => right-multiply
+  const ov = isRot ? quatToOV(qMul(qCur, rot))
+                   : { oX: cur.oX, oY: cur.oY, oZ: cur.oZ, theta: cur.theta };
+  const target = {
+    x: cur.x + dW[0], y: cur.y + dW[1], z: cur.z + dW[2],
+    oX: ov.oX, oY: ov.oY, oZ: ov.oZ, theta: ov.theta,
+  };
+  const req = { service: motion.name, component: cameraName,
+                destination: { referenceFrame: 'world', pose: target } };
+  log(`#${n} ${label} → move ${JSON.stringify(req)}`);
+  try {
+    const dest = new VIAM.PoseInFrame({ referenceFrame: 'world', pose: new VIAM.Pose(target) });
+    const result = await motion.move(dest, cameraName);
+    const tMove = performance.now();
+    log(`#${n} ${label} ← result=${JSON.stringify(result)}`);
+    // We are the only mover: the new pose IS the commanded target. Cache it,
+    // no read-back. (Optionally verify against hardware.)
+    setPose(target);
+    let verifyMs = 0;
+    if ($('verifyPose').checked) {
+      const t = performance.now();
+      const after = await syncPose('after (measured)');
+      verifyMs = performance.now() - t;
+      if (after) {
+        const d = Math.hypot(after.x - cur.x, after.y - cur.y, after.z - cur.z);
+        log(`  Δposition(measured) = ${d.toFixed(2)} mm` + (d < 0.05 && !isRot ? '  ⚠ camera did NOT move' : ''));
+      }
+    }
+    log(`#${n} timing: getPose(cur)=${(tBefore - tPress).toFixed(0)}ms${synced ? '' : ' (cached)'}  ` +
+        `move()=${(tMove - tBefore).toFixed(0)}ms  ` +
+        `verify=${verifyMs.toFixed(0)}ms  total=${(performance.now() - tPress).toFixed(0)}ms`);
+  } catch (e) {
+    // The move failed — our cache may be stale (arm may have partially moved
+    // or faulted). Force a fresh read next time.
+    curPose = null;
+    log(`#${n} ${label} ✗ ERROR after ${(performance.now() - tBefore).toFixed(0)}ms: ${e?.message || e}`);
+    console.error(`#${n} ${label} error`, e);
+  } finally {
+    setBusy(false);
+  }
+}
+
+const refreshPose = () => syncPose('synced');
+
+// map a control name -> { trans:[dx,dy,dz], rot:quat } in the CAMERA frame.
+// Camera convention: +Z forward (out of lens), +X right, +Y down.
+function buildDelta(move) {
+  const t = parseFloat($('transStep').value) || 0;
+  const r = (parseFloat($('rotStep').value) || 0) * D2R;
+  const fwd = $('invertFwd').checked ? -1 : 1;
+  const T = (x, y, z) => ({ trans: [x, y, z], rot: QI });
+  const R = (ax, ay, az, ang) => ({ trans: [0, 0, 0], rot: qAxisAngle(ax, ay, az, ang) });
+  switch (move) {
+    case 'fwd':   return T(0, 0,  t * fwd);
+    case 'back':  return T(0, 0, -t * fwd);
+    case 'right': return T( t, 0, 0);
+    case 'left':  return T(-t, 0, 0);
+    case 'up':    return T(0, -t, 0);
+    case 'down':  return T(0,  t, 0);
+    // rotations about the camera's own axes
+    case 'twistCW':   return R(0, 0, 1,  r);   // roll about view axis (+Z)
+    case 'twistCCW':  return R(0, 0, 1, -r);
+    case 'pitchUp':   return R(1, 0, 0,  r);   // about +X: view tilts toward -Y (up)
+    case 'pitchDown': return R(1, 0, 0, -r);
+    case 'yawRight':  return R(0, 1, 0,  r);   // about +Y: view swings toward +X (right)
+    case 'yawLeft':   return R(0, 1, 0, -r);
+  }
+  return null;
+}
+
+const LABELS = {
+  fwd: 'forward', back: 'back', left: 'strafe left', right: 'strafe right',
+  up: 'up', down: 'down', twistCW: 'twist ↻', twistCCW: 'twist ↺',
+  pitchUp: 'look up', pitchDown: 'look down', yawLeft: 'yaw left', yawRight: 'yaw right',
+};
+function doMove(move) {
+  const d = buildDelta(move);
+  if (d) jog(d, LABELS[move] || move);
+}
+
+// ---- wiring ---------------------------------------------------------------
+$('connectBtn').addEventListener('click', connect);
+$('cameraSel').addEventListener('change', (e) => {
+  cameraName = e.target.value;
+  curPose = null;   // new camera -> re-read pose from hardware
+  detectGripper();
+  if (cameraName) { startVideo(); refreshPose(); log('camera: ' + cameraName); }
+  else stopVideo();
+});
+$('motionSel').addEventListener('change', (e) => useMotion(e.target.value));
+$('videoOn').addEventListener('change', (e) => {
+  if (e.target.checked) { log('video ON'); startVideo(); }
+  else { log('video OFF'); stopVideo(); }
+});
+$('syncBtn').addEventListener('click', () => syncPose('synced'));
+// Recovery actions may move the arm (or clear a fault) -> our cached pose is
+// no longer trustworthy, so re-read from hardware afterwards.
+$('clearErrBtn').addEventListener('click', async () => { await armDo({ clear_error: true }, 'clear_error'); syncPose('synced'); });
+$('getErrBtn').addEventListener('click', () => armDo({ get_error: true }, 'get_error'));
+$('manualOnBtn').addEventListener('click', () => armDo({ enter_manual_mode: true }, 'enter_manual_mode'));
+$('manualOffBtn').addEventListener('click', async () => { await armDo({ exit_manual_mode: true }, 'exit_manual_mode'); syncPose('synced'); });
+$('gripOpenBtn').addEventListener('click', () => gripperDo('open'));
+$('gripCloseBtn').addEventListener('click', () => gripperDo('close'));
+$('gripStopBtn').addEventListener('click', () => gripperDo('stop'));
+document.querySelectorAll('[data-move]').forEach(btn =>
+  btn.addEventListener('click', () => doMove(btn.dataset.move)));
+
+const KEYMAP = {
+  w: 'fwd', s: 'back', a: 'left', d: 'right', r: 'up', f: 'down',
+  q: 'twistCCW', e: 'twistCW',
+  arrowup: 'pitchUp', arrowdown: 'pitchDown', arrowleft: 'yawLeft', arrowright: 'yawRight',
+};
+window.addEventListener('keydown', (ev) => {
+  const tag = (ev.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+  const move = KEYMAP[ev.key.toLowerCase()];
+  if (!move) return;
+  ev.preventDefault();
+  doMove(move);
+});
+
+// ---- boot -----------------------------------------------------------------
+// A Viam-hosted app injects credentials via cookies. If those are present,
+// hide the manual connect widget — the user shouldn't have to see/use it.
+function cookieCreds() {
+  const host = cookie('hostname', 'host');
+  const id = cookie('apiKeyId', 'api-key-id');
+  const key = cookie('apiKey', 'api-key');
+  return (host && id && key) ? { host, id, key } : null;
+}
+
+const creds = prefillCreds();
+if (cookieCreds()) $('connectCard').style.display = 'none';
+if (creds.host && creds.id && creds.key) connect();
+</script>
+</body>
+</html>

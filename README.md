@@ -19,6 +19,10 @@ The `erh:vmodutils` module bundles a few utility models for arm-based automation
 11. **`erh:vmodutils:calibration-checker`** — A sensor that compares world-frame positions of a shared AprilTag across two or more pose trackers to detect arm/camera drift.
 12. **`erh:vmodutils:session-capture`** — A sensor wired into the data manager's `capture_control_sensor` that toggles capture on/off for a list of components and tags clips with a session id.
 
+It also ships one **Viam application**:
+
+- **`arm-control`** — A browser app that lets you jog an arm with video-game controls expressed in the frame of an arm-mounted camera. See [Application: `arm-control`](#application-arm-control).
+
 ---
 
 ## Model: `erh:vmodutils:pc-crop-camera`
@@ -504,3 +508,45 @@ Returns:
 ```json
 { "status": "stopped" }
 ```
+
+---
+
+## Application: `arm-control`
+
+A self-contained browser app (`app-arm-control/index.html`) for driving an arm through a camera mounted on it — think video-game controls, but every motion is expressed in the **camera's own frame**. You pick the arm-mounted camera; pressing a control moves the arm so the camera translates or re-aims accordingly.
+
+### How it works
+
+There is no pose math in the app. For each control it sends a single `Move` request to the machine's motion service (default `builtin`) where:
+
+- the **component** being moved is the camera, and
+- the **destination** is a `PoseInFrame` whose `reference_frame` is the camera itself and whose pose is a small delta.
+
+Because the reference frame is the camera's current frame, "move forward 10 mm" is simply `pose = {z: 10}` — the motion service resolves the inverse kinematics and (collision-aware) planning to move whatever arm carries the camera. The camera must be part of the machine's frame system (i.e. rigidly attached to the arm), and a motion service must be configured.
+
+### Camera-frame convention
+
+Translations use the Viam camera convention: **+Z forward** (out of the lens), **+X right**, **+Y down**. If a particular camera's `+Z` points *into* the lens, tick **"invert forward axis."** Twist is a roll about the view axis; "look up/down" and "yaw" re-aim the view direction. Step sizes (translation mm, rotation degrees) are adjustable live.
+
+### Controls
+
+| Action | Button | Key |
+| ------ | ------ | --- |
+| Forward / Back | Forward / Back | `W` / `S` |
+| Strafe left / right | Strafe ◀ / ▶ | `A` / `D` |
+| Up / Down | Up / Down | `R` / `F` |
+| Twist (roll) ↺ / ↻ | Twist ↺ / ↻ | `Q` / `E` |
+| Look up / down (pitch) | Look up / down | `↑` / `↓` |
+| Yaw left / right | Yaw ◀ / ▶ | `←` / `→` |
+
+### Running it
+
+When deployed as a Viam application, open the hosted app for your machine — the platform injects the machine host and API key, so it connects automatically.
+
+For local testing, open `app-arm-control/index.html` directly in a browser and either fill in the connection form or pass credentials as query params:
+
+```
+app-arm-control/index.html?host=<machine-address>.viam.cloud&api-key-id=<id>&api-key=<key>
+```
+
+The app loads the [Viam TypeScript SDK](https://ts.viam.dev) from a pinned ESM CDN, so an internet connection is required.

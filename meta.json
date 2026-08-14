@@ -92,7 +92,14 @@
         "short_description": "listens on a port and temporarily redirects all http traffic to a configured host"
     }
   ],
-  "applications": null,
+  "applications": [
+    {
+      "name": "arm-control",
+      "type": "single_machine",
+      "entrypoint": "app-arm-control/index.html",
+      "fragmentIds": []
+    }
+  ],
   "entrypoint": "./bin/vmodutils",
   "first_run": "",
   "build": {

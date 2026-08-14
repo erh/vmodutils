@@ -144,7 +144,7 @@
 
 <main>
   <div class="stage">
-    <img id="video" alt="" hidden />
+    <video id="video" autoplay playsinline muted hidden></video>
     <div id="videoHint">connect and pick a camera to see the feed</div>
   </div>
 
@@ -171,7 +171,7 @@
       <select id="motionSel"><option value="builtin">builtin</option></select>
       <div class="toggle">
         <input id="videoOn" type="checkbox" checked />
-        <label for="videoOn" style="margin:0">stream video (1 fps)</label>
+        <label for="videoOn" style="margin:0">stream video</label>
       </div>
       <div style="display:flex;align-items:center;gap:8px;margin:8px 0 4px">
         <label style="margin:0">Camera world pose</label>
@@ -393,8 +393,6 @@ function prefillCreds() {
 let client = null;
 let motion = null;
 let cameraName = '';
-let videoTimer = null;
-let lastObjUrl = null;
 let inFlight = false;
 let armNames = [];       // arm component short names
 let gripperNames = [];   // gripper component short names
@@ -544,36 +542,33 @@ function useMotion(name) {
   log('motion service: ' + name);
 }
 
-// ---- video feed -----------------------------------------------------------
-function stopVideo() {
-  if (videoTimer) { clearInterval(videoTimer); videoTimer = null; }
+// ---- video feed (live WebRTC track via StreamClient) ----------------------
+let streamClient = null;
+let streamName = '';   // camera whose track is currently attached
+
+async function stopVideo() {
+  const v = $('video');
+  if (v.srcObject) { v.srcObject.getTracks().forEach(t => t.stop()); v.srcObject = null; }
+  v.hidden = true;
+  if (streamClient && streamName) { try { await streamClient.remove(streamName); } catch { /* ignore */ } }
+  streamName = '';
 }
-async function pollFrame() {
-  if (!client || !cameraName) return;
-  if (inFlight) return;   // don't compete with a move/getPose for the channel
-  if (!$('videoOn').checked) return;
+async function startVideo() {
+  await stopVideo();
+  if (!cameraName || !$('videoOn').checked) return;
   try {
-    const cam = new VIAM.CameraClient(client, cameraName);
-    const { images } = await cam.getImages();
-    if (!images || !images.length) return;
-    const img = images.find(i => /jpeg|png/.test(i.mimeType)) || images[0];
-    const blob = new Blob([img.image], { type: img.mimeType || 'image/jpeg' });
-    const url = URL.createObjectURL(blob);
+    if (!streamClient) streamClient = new VIAM.StreamClient(client);
+    const ms = await streamClient.getStream(cameraName);   // live MediaStream (WebRTC)
+    streamName = cameraName;
     const v = $('video');
-    v.src = url;
+    v.srcObject = ms;
     v.hidden = false;
     $('videoHint').style.display = 'none';
-    if (lastObjUrl) URL.revokeObjectURL(lastObjUrl);
-    lastObjUrl = url;
+    await v.play().catch(() => {});
+    log('video stream: ' + cameraName);
   } catch (e) {
     log('video error: ' + (e?.message || e));
   }
-}
-function startVideo() {
-  stopVideo();
-  if (!cameraName) return;
-  pollFrame();
-  videoTimer = setInterval(pollFrame, 1000); // 1 fps
 }
 
 // ---- jogging: relative move expressed in the camera's own frame -----------

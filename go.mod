@@ -5,7 +5,7 @@ go 1.25.10
 require (
 	github.com/golang/geo v0.0.0-20230421003525-6adc56603217
 	github.com/lucasb-eyer/go-colorful v1.3.0
-	go.viam.com/rdk v0.129.0
+	go.viam.com/rdk v1.5.0-rc0.0.20260824211945-8876630ad649
 	go.viam.com/test v1.2.4
 	go.viam.com/utils v0.10.1
 	neilpa.me/go-stl v0.5.0
@@ -229,5 +229,3 @@ require (
 	periph.io/x/conn/v3 v3.7.0 // indirect
 	periph.io/x/host/v3 v3.8.1 // indirect
 )
-
-replace go.viam.com/rdk => github.com/oliviamiller/rdk v0.0.0-20260824204007-bb3ff2552d76

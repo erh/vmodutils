@@ -135,6 +135,9 @@ func TestMultiArmPositionSwitchSetPositionAndGetPosition(t *testing.T) {
 		fakeFsSvc.FrameSystemConfigFunc = func(ctx context.Context) (*framesystem.Config, error) {
 			return mustTestFSConfigArm3DOF(t), nil
 		}
+		fakeFsSvc.CurrentInputsFunc = func(ctx context.Context) (referenceframe.FrameSystemInputs, error) {
+			return referenceframe.FrameSystemInputs{"arm": {0.0, 0.0, 0.0}}, nil
+		}
 
 		allDeps := resource.Dependencies{
 			fakeArm.Name():     fakeArm,

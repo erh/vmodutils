@@ -631,8 +631,6 @@ github.com/nishanths/predeclared v0.0.0-20200524104333-86fad755b4d3/go.mod h1:nt
 github.com/oklog/oklog v0.3.2/go.mod h1:FCV+B7mhrz4o+ueLpx+KqkyXRGMWOYEvfiXtdGtbWGs=
 github.com/oklog/run v1.0.0/go.mod h1:dlhp/R75TPv97u0XWUtDeV/lRKWPKSdTuV0TZvrmrQA=
 github.com/olekukonko/tablewriter v0.0.0-20170122224234-a0225b3f23b5/go.mod h1:vsDQFd/mU46D+Z4whnwzcISnGGzXWMclvtLoiIKAKIo=
-github.com/oliviamiller/rdk v0.0.0-20260824204007-bb3ff2552d76 h1:y6zR1K+ro8rngXjDN/0oJ26KT8jCTzLbus/+tZn0cFY=
-github.com/oliviamiller/rdk v0.0.0-20260824204007-bb3ff2552d76/go.mod h1:6Z3MbiAruKHIoDLRhFLN544EEqsW2j6wl/pgB72G9xE=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/ginkgo v1.7.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/gomega v1.4.3/go.mod h1:ex+gbHU/CVuBBDIJjb2X0qEXbFg53c61hWP/1CpauHY=
@@ -953,6 +951,8 @@ go.uber.org/zap v1.28.0 h1:IZzaP1Fv73/T/pBMLk4VutPl36uNC+OSUh3JLG3FIjo=
 go.uber.org/zap v1.28.0/go.mod h1:rDLpOi171uODNm/mxFcuYWxDsqWSAVkFdX4XojSKg/Q=
 go.viam.com/api v0.1.577 h1:rQbb03z4KFNQRS5n3VVKPd2bnYVDQkjzHHozh6Xmt5Y=
 go.viam.com/api v0.1.577/go.mod h1:4wA8A7g955PH03er3PNSJAi32bu3fpj9/kFp6AbrDNY=
+go.viam.com/rdk v1.5.0-rc0.0.20260824211945-8876630ad649 h1:J8l7VLk/OsiSWBHDHROZuJOB0Asf1AHLwfG6veoYKv4=
+go.viam.com/rdk v1.5.0-rc0.0.20260824211945-8876630ad649/go.mod h1:6Z3MbiAruKHIoDLRhFLN544EEqsW2j6wl/pgB72G9xE=
 go.viam.com/test v1.2.4 h1:JYgZhsuGAQ8sL9jWkziAXN9VJJiKbjoi9BsO33TW3ug=
 go.viam.com/test v1.2.4/go.mod h1:zI2xzosHdqXAJ/kFqcN+OIF78kQuTV2nIhGZ8EzvaJI=
 go.viam.com/utils v0.10.1 h1:O+ysq9uh99G/Ak+2qCvWQORYqjkcnz7yinutGyawRfE=

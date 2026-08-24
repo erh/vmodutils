@@ -363,6 +363,7 @@ func goToPositionUsingJointToJointMotion(
 	armName string,
 	motionSvc motion.Service,
 	visionSvcs []vision.Service,
+	fsSvc framesystem.Service,
 	extra map[string]any,
 	constraints *motionplan.Constraints,
 	logger logging.Logger,
@@ -375,18 +376,32 @@ func goToPositionUsingJointToJointMotion(
 	if err != nil {
 		return err
 	}
-	if extra == nil {
-		extra = make(map[string]any)
-	} else if extra[extraParamsKeyGoalState] != nil {
+	if extra[extraParamsKeyGoalState] != nil {
 		return fmt.Errorf("cannot provide '%s' in 'extra' when using joint to joint motion", extraParamsKeyGoalState)
 	}
-	extra[extraParamsKeyGoalState] = serialize(goalFrameSystemInputs)
+
+	// The planner computes goal poses for every frame in the frame system, so goal_state
+	// must contain inputs for all of them — hold everything else at its current position.
+	goalInputs, err := fsSvc.CurrentInputs(ctx)
+	if err != nil {
+		return err
+	}
+	for name, inputs := range goalFrameSystemInputs {
+		goalInputs[name] = inputs
+	}
+
+	// copy so we don't mutate the caller's map (e.g. the component's saved config)
+	extraWithGoal := make(map[string]any, len(extra)+1)
+	for k, v := range extra {
+		extraWithGoal[k] = v
+	}
+	extraWithGoal[extraParamsKeyGoalState] = serialize(goalInputs)
 
 	// Call Motion.Move
 	_, err = motionSvc.Move(ctx, motion.MoveReq{
 		ComponentName: armName,
 		WorldState:    worldState,
-		Extra:         extra,
+		Extra:         extraWithGoal,
 		Constraints:   constraints,
 	})
 	return err

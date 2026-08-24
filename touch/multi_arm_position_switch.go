@@ -38,13 +38,16 @@ func init() {
 }
 
 type MultiArmPositionSwitchConfig struct {
-	Arm                          string                  `json:"arm,omitempty"`
-	JointsList                   [][]float64             `json:"joints_list,omitempty"`
-	Motion                       string                  `json:"motion,omitempty"`
-	VisionServices               []string                `json:"vision_services,omitempty"`
-	Extra                        map[string]any          `json:"extra,omitempty"`
-	Constraints                  *motionplan.Constraints `json:"constraints,omitempty"`
-	WriteFilesToCaptureDirectory bool                    `json:"write_files_to_capture_directory,omitempty"`
+	Arm            string                  `json:"arm,omitempty"`
+	JointsList     [][]float64             `json:"joints_list,omitempty"`
+	Motion         string                  `json:"motion,omitempty"`
+	VisionServices []string                `json:"vision_services,omitempty"`
+	Extra          map[string]any          `json:"extra,omitempty"`
+	Constraints    *motionplan.Constraints `json:"constraints,omitempty"`
+
+	WriteFilesToCaptureDirectory bool   `json:"write_files_to_capture_directory,omitempty"`
+	CaptureSubDirMetadataKey     string `json:"capture_sub_dir_metadata_key,omitempty"`
+	CaptureSubDirFormatString    string `json:"capture_sub_dir_format_string,omitempty"`
 
 	MaxSpeedDegsPerSec         float64 `json:"max_speed_degs_per_sec,omitempty"`
 	MaxAccelerationDegsPerSec2 float64 `json:"max_acceleration_degs_per_sec2,omitempty"`
@@ -253,10 +256,10 @@ func (maps *MultiArmPositionSwitch) goToPosition(ctx context.Context, position u
 	}
 	defer maps.executing.Store(false)
 
-	traceID := getTraceID(ctx)
-	dirPath := file_utils.GetPathInCaptureDir(fmt.Sprintf("tag=%s", traceID))
-	if traceID == "" && maps.cfg.WriteFilesToCaptureDirectory {
-		maps.logger.Warnf("no traceID set, will write files directly to capture directory")
+	subDir := captureSubDir(ctx, maps.cfg.CaptureSubDirFormatString, maps.cfg.CaptureSubDirMetadataKey)
+	dirPath := file_utils.GetPathInCaptureDir(subDir)
+	if subDir == "" && maps.cfg.WriteFilesToCaptureDirectory {
+		maps.logger.Warnf("no capture sub-directory metadata present, writing files directly to capture directory")
 	}
 
 	maps.updatePosition(position)

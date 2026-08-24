@@ -23,7 +23,7 @@ import (
 	"go.viam.com/rdk/services/motion"
 	"go.viam.com/rdk/services/vision"
 	"go.viam.com/rdk/spatialmath"
-	"go.viam.com/utils/trace"
+	"go.viam.com/rdk/utils/contextutils/metadata"
 
 	"github.com/erh/vmodutils/file_utils"
 )
@@ -235,8 +235,8 @@ func GetApproachPoint(p r3.Vector, deltaLinear float64, o *spatialmath.Orientati
 	return approachPoint
 }
 
-func writeFilesForPosition(ctx context.Context, traceID string, pos int, pc pointcloud.PointCloud, pif *referenceframe.PoseInFrame, pcInWorld pointcloud.PointCloud, images []camera.NamedImage, imagesMd resource.ResponseMetadata) error {
-	dirPath := file_utils.GetPathInCaptureDir(fmt.Sprintf("tag=%s", traceID))
+func writeFilesForPosition(ctx context.Context, captureSubDir string, pos int, pc pointcloud.PointCloud, pif *referenceframe.PoseInFrame, pcInWorld pointcloud.PointCloud, images []camera.NamedImage, imagesMd resource.ResponseMetadata) error {
+	dirPath := file_utils.GetPathInCaptureDir(captureSubDir)
 
 	// Save pcd from camera in camera frame
 	if err := file_utils.SavePointCloudFile(pc, dirPath, "imaging_camera_frame_"+strconv.Itoa(pos)+".pcd", time.Now()); err != nil {
@@ -271,13 +271,13 @@ func writeFilesForPosition(ctx context.Context, traceID string, pos int, pc poin
 	return nil
 }
 
-func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service, writeFilesToCaptureDirectory bool) (pointcloud.PointCloud, error) {
+func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service, writeFilesToCaptureDirectory bool, captureSubDirFormatString, captureSubDirMetadataKey string) (pointcloud.PointCloud, error) {
 	pcsInWorld := []pointcloud.PointCloud{}
 	totalSize := 0
 
-	// If a traceID is present, we will write files to a traceID sub-directory in the capture directory.
-	// Otherwise, we will write files at the top-level of the capture directory.
-	traceID := getTraceID(ctx)
+	// If a capture sub-directory is derived from request metadata, we write files there.
+	// Otherwise, we write files at the top level of the capture directory.
+	subDir := captureSubDir(ctx, captureSubDirFormatString, captureSubDirMetadataKey)
 
 	for i, p := range positions {
 		err := p.SetPosition(ctx, 2, nil)
@@ -313,7 +313,7 @@ func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswi
 			if err != nil {
 				return nil, fmt.Errorf("couldn't get images from camera: %w", err)
 			}
-			if err := writeFilesForPosition(ctx, traceID, i, pc, pif, pcInWorld, images, imagesMd); err != nil {
+			if err := writeFilesForPosition(ctx, subDir, i, pc, pif, pcInWorld, images, imagesMd); err != nil {
 				return nil, err
 			}
 		}
@@ -331,7 +331,7 @@ func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswi
 
 	if writeFilesToCaptureDirectory {
 		// Save merged pcd
-		dirPath := file_utils.GetPathInCaptureDir(fmt.Sprintf("tag=%s", traceID))
+		dirPath := file_utils.GetPathInCaptureDir(subDir)
 		if err := file_utils.SavePointCloudFile(big, dirPath, "merged.pcd", time.Now()); err != nil {
 			return nil, err
 		}
@@ -487,13 +487,13 @@ func floatsToInputs(j []float64) []referenceframe.Input {
 	return out
 }
 
-func GetMergedPointCloudFromMultiPositionSwitch(ctx context.Context, s toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service, writeFilesToCaptureDirectory bool) (pointcloud.PointCloud, error) {
+func GetMergedPointCloudFromMultiPositionSwitch(ctx context.Context, s toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service, writeFilesToCaptureDirectory bool, captureSubDirFormatString, captureSubDirMetadataKey string) (pointcloud.PointCloud, error) {
 	pcsInWorld := []pointcloud.PointCloud{}
 	totalSize := 0
 
-	// If a traceID is present, we will write files to a traceID sub-directory in the capture directory.
-	// Otherwise, we will write files at the top-level of the capture directory.
-	traceID := getTraceID(ctx)
+	// If a capture sub-directory is derived from request metadata, we write files there.
+	// Otherwise, we write files at the top level of the capture directory.
+	subDir := captureSubDir(ctx, captureSubDirFormatString, captureSubDirMetadataKey)
 
 	numPositions, _, err := s.GetNumberOfPositions(ctx, nil)
 	if err != nil {
@@ -534,7 +534,7 @@ func GetMergedPointCloudFromMultiPositionSwitch(ctx context.Context, s toggleswi
 				return nil, fmt.Errorf("couldn't get images from camera: %w", err)
 			}
 
-			if err := writeFilesForPosition(ctx, traceID, int(i), pc, pif, pcInWorld, images, imagesMd); err != nil {
+			if err := writeFilesForPosition(ctx, subDir, int(i), pc, pif, pcInWorld, images, imagesMd); err != nil {
 				return nil, err
 			}
 		}
@@ -551,10 +551,13 @@ func GetMergedPointCloudFromMultiPositionSwitch(ctx context.Context, s toggleswi
 	return big, nil
 }
 
-func getTraceID(ctx context.Context) string {
-	traceID := ""
-	if span := trace.FromContext(ctx); span != nil {
-		traceID = span.SpanContext().TraceID().String()
+func captureSubDir(ctx context.Context, formatString, metadataKey string) string {
+	if formatString == "" || metadataKey == "" {
+		return ""
 	}
-	return traceID
+	value, ok := metadata.Get(ctx, metadataKey)
+	if !ok || value == "" {
+		return ""
+	}
+	return fmt.Sprintf(formatString, value)
 }

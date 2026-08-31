@@ -40,52 +40,7 @@ type VisionServiceSource struct {
 	MinObjects int    `json:"min_objects"`
 }
 
-// VisionServiceSourceList unmarshals either a legacy string list
-// (["left","right"] → MinObjects 0) or a list of source objects
-// ([{"name":"left","min_objects":1}, ...]).
 type VisionServiceSourceList []VisionServiceSource
-
-func (l *VisionServiceSourceList) UnmarshalJSON(data []byte) error {
-	if len(data) == 0 || string(data) == "null" {
-		*l = nil
-		return nil
-	}
-
-	var names []string
-	if err := json.Unmarshal(data, &names); err == nil {
-		out := make(VisionServiceSourceList, len(names))
-		for i, n := range names {
-			out[i] = VisionServiceSource{Name: n, MinObjects: 0}
-		}
-		*l = out
-		return nil
-	}
-
-	type rawSource struct {
-		Name       string `json:"name"`
-		MinObjects *int   `json:"min_objects"`
-	}
-	var raw []rawSource
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return fmt.Errorf("vision_services must be a list of strings or objects with name/min_objects: %w", err)
-	}
-	out := make(VisionServiceSourceList, len(raw))
-	for i, r := range raw {
-		if r.Name == "" {
-			return fmt.Errorf("vision_services[%d]: name is required", i)
-		}
-		minObjects := 0
-		if r.MinObjects != nil {
-			minObjects = *r.MinObjects
-		}
-		if minObjects < 0 {
-			return fmt.Errorf("vision_services[%d]: min_objects must be >= 0", i)
-		}
-		out[i] = VisionServiceSource{Name: r.Name, MinObjects: minObjects}
-	}
-	*l = out
-	return nil
-}
 
 func (l VisionServiceSourceList) Names() []string {
 	names := make([]string, len(l))
@@ -95,26 +50,103 @@ func (l VisionServiceSourceList) Names() []string {
 	return names
 }
 
+// MergeAllObjectsConfig attributes. VisionServices is []any so RDK's mapstructure
+// attribute decoder accepts both legacy string lists and {name,min_objects} objects.
+// encoding/json UnmarshalJSON alone is not enough — TransformAttributeMap does not use it.
 type MergeAllObjectsConfig struct {
-	VisionServices VisionServiceSourceList `json:"vision_services"`
-	Label          string                  `json:"label"`
+	VisionServices []any  `json:"vision_services"`
+	Label          string `json:"label"`
 
 	pcclean.Config
 }
 
+// ParseVisionServices normalizes vision_services entries that arrive as either
+// strings ("left") or maps ({"name":"left","min_objects":1}).
+func ParseVisionServices(raw []any) (VisionServiceSourceList, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	out := make(VisionServiceSourceList, 0, len(raw))
+	for i, entry := range raw {
+		src, err := parseVisionServiceEntry(i, entry)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, src)
+	}
+	return out, nil
+}
+
+func parseVisionServiceEntry(i int, entry any) (VisionServiceSource, error) {
+	switch v := entry.(type) {
+	case string:
+		if v == "" {
+			return VisionServiceSource{}, fmt.Errorf("vision_services[%d]: name is required", i)
+		}
+		return VisionServiceSource{Name: v, MinObjects: 0}, nil
+	case map[string]any:
+		name, _ := v["name"].(string)
+		if name == "" {
+			return VisionServiceSource{}, fmt.Errorf("vision_services[%d]: name is required", i)
+		}
+		minObjects, err := optionalIntAttr(v, "min_objects")
+		if err != nil {
+			return VisionServiceSource{}, fmt.Errorf("vision_services[%d]: %w", i, err)
+		}
+		if minObjects < 0 {
+			return VisionServiceSource{}, fmt.Errorf("vision_services[%d]: min_objects must be >= 0", i)
+		}
+		return VisionServiceSource{Name: name, MinObjects: minObjects}, nil
+	default:
+		// After JSON round-trip through some paths, maps may be map[string]interface{}
+		// already handled above; also accept typed structs from tests.
+		b, err := json.Marshal(entry)
+		if err != nil {
+			return VisionServiceSource{}, fmt.Errorf("vision_services[%d]: must be a string or object with name/min_objects", i)
+		}
+		var asString string
+		if err := json.Unmarshal(b, &asString); err == nil {
+			return parseVisionServiceEntry(i, asString)
+		}
+		var asMap map[string]any
+		if err := json.Unmarshal(b, &asMap); err == nil {
+			return parseVisionServiceEntry(i, asMap)
+		}
+		return VisionServiceSource{}, fmt.Errorf("vision_services[%d]: must be a string or object with name/min_objects", i)
+	}
+}
+
+func optionalIntAttr(m map[string]any, key string) (int, error) {
+	raw, ok := m[key]
+	if !ok || raw == nil {
+		return 0, nil
+	}
+	switch n := raw.(type) {
+	case int:
+		return n, nil
+	case int32:
+		return int(n), nil
+	case int64:
+		return int(n), nil
+	case float64:
+		return int(n), nil
+	case json.Number:
+		i, err := n.Int64()
+		return int(i), err
+	default:
+		return 0, fmt.Errorf("%s must be an integer", key)
+	}
+}
+
 func (c *MergeAllObjectsConfig) Validate(path string) ([]string, []string, error) {
-	if len(c.VisionServices) == 0 {
+	sources, err := ParseVisionServices(c.VisionServices)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(sources) == 0 {
 		return nil, nil, fmt.Errorf("need at least one vision service")
 	}
-	for i, s := range c.VisionServices {
-		if s.Name == "" {
-			return nil, nil, fmt.Errorf("vision_services[%d]: name is required", i)
-		}
-		if s.MinObjects < 0 {
-			return nil, nil, fmt.Errorf("vision_services[%d]: min_objects must be >= 0", i)
-		}
-	}
-	return c.VisionServices.Names(), nil, nil
+	return sources.Names(), nil, nil
 }
 
 func newMergeAllObjects(ctx context.Context, deps resource.Dependencies, config resource.Config, logger logging.Logger) (camera.Camera, error) {
@@ -124,14 +156,19 @@ func newMergeAllObjects(ctx context.Context, deps resource.Dependencies, config 
 	}
 	pcclean.FillDefaults(&newConf.Config)
 
+	sources, err := ParseVisionServices(newConf.VisionServices)
+	if err != nil {
+		return nil, err
+	}
+
 	cc := &MergeAllObjectsCamera{
 		name:    config.ResourceName(),
 		cfg:     newConf,
-		sources: make([]mergeAllObjectsSource, 0, len(newConf.VisionServices)),
+		sources: make([]mergeAllObjectsSource, 0, len(sources)),
 		logger:  logger,
 	}
 
-	for _, src := range newConf.VisionServices {
+	for _, src := range sources {
 		s, err := vision.FromProvider(deps, src.Name)
 		if err != nil {
 			return nil, err

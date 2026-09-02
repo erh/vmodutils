@@ -2,7 +2,9 @@ package touch
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"go.viam.com/rdk/components/camera"
@@ -12,6 +14,7 @@ import (
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/services/vision"
 	"go.viam.com/rdk/spatialmath"
+	viz "go.viam.com/rdk/vision"
 
 	"github.com/erh/vmodutils"
 	"github.com/erh/vmodutils/pcclean"
@@ -28,19 +31,63 @@ func init() {
 		})
 }
 
+// VisionServiceSource is one GetObjectPointClouds dependency for the merge camera.
+// MinObjects is the minimum number of label-matching, non-empty objects required
+// from this service on each NextPointCloud call. 0 means the source is optional
+// (errors / empty results are skipped, matching legacy string-list behavior).
+type VisionServiceSource struct {
+	Name       string `json:"name"`
+	MinObjects int    `json:"min_objects"`
+}
+
+// VisionServices is []any so RDK's mapstructure decoder accepts both legacy
+// string lists and {name,min_objects} objects (UnmarshalJSON is not used).
 type MergeAllObjectsConfig struct {
-	VisionServices []string `json:"vision_services"`
-	Label          string   `json:"label"`
+	VisionServices []any  `json:"vision_services"`
+	Label          string `json:"label"`
 
 	pcclean.Config
 }
 
-func (c *MergeAllObjectsConfig) Validate(path string) ([]string, []string, error) {
-	if len(c.VisionServices) == 0 {
+func parseVisionServices(raw []any) ([]VisionServiceSource, error) {
+	out := make([]VisionServiceSource, 0, len(raw))
+	for i, e := range raw {
+		if s, ok := e.(string); ok {
+			if s == "" {
+				return nil, fmt.Errorf("vision_services[%d]: name is required", i)
+			}
+			out = append(out, VisionServiceSource{Name: s})
+			continue
+		}
+		b, err := json.Marshal(e)
+		if err != nil {
+			return nil, fmt.Errorf("vision_services[%d]: want string or {name,min_objects}", i)
+		}
+		var src VisionServiceSource
+		if err := json.Unmarshal(b, &src); err != nil || src.Name == "" {
+			return nil, fmt.Errorf("vision_services[%d]: want string or {name,min_objects}", i)
+		}
+		if src.MinObjects < 0 {
+			return nil, fmt.Errorf("vision_services[%d]: min_objects must be >= 0", i)
+		}
+		out = append(out, src)
+	}
+	return out, nil
+}
+
+func (c *MergeAllObjectsConfig) Validate(string) ([]string, []string, error) {
+	srcs, err := parseVisionServices(c.VisionServices)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(srcs) == 0 {
 		return nil, nil, fmt.Errorf("need at least one vision service")
 	}
-
-	return c.VisionServices, nil, nil
+	names := make([]string, len(srcs))
+	for i, s := range srcs {
+		names[i] = s.Name
+	}
+	return names, nil, nil
 }
 
 func newMergeAllObjects(ctx context.Context, deps resource.Dependencies, config resource.Config, logger logging.Logger) (camera.Camera, error) {
@@ -50,32 +97,45 @@ func newMergeAllObjects(ctx context.Context, deps resource.Dependencies, config 
 	}
 	pcclean.FillDefaults(&newConf.Config)
 
-	cc := &MergeAllObjectsCamera{
-		name:     config.ResourceName(),
-		cfg:      newConf,
-		services: []vision.Service{},
-		logger:   logger,
+	sources, err := parseVisionServices(newConf.VisionServices)
+	if err != nil {
+		return nil, err
 	}
 
-	for _, sn := range newConf.VisionServices {
-		s, err := vision.FromProvider(deps, sn)
+	cc := &MergeAllObjectsCamera{
+		name:    config.ResourceName(),
+		cfg:     newConf,
+		sources: make([]mergeAllObjectsSource, 0, len(sources)),
+		logger:  logger,
+	}
+
+	for _, src := range sources {
+		s, err := vision.FromProvider(deps, src.Name)
 		if err != nil {
 			return nil, err
 		}
-		cc.services = append(cc.services, s)
+		cc.sources = append(cc.sources, mergeAllObjectsSource{
+			svc:        s,
+			minObjects: src.MinObjects,
+		})
 	}
 
 	return cc, nil
+}
+
+type mergeAllObjectsSource struct {
+	svc        vision.Service
+	minObjects int
 }
 
 type MergeAllObjectsCamera struct {
 	resource.AlwaysRebuild
 	resource.TriviallyCloseable
 
-	name     resource.Name
-	cfg      *MergeAllObjectsConfig
-	logger   logging.Logger
-	services []vision.Service
+	name    resource.Name
+	cfg     *MergeAllObjectsConfig
+	logger  logging.Logger
+	sources []mergeAllObjectsSource
 }
 
 func (opc *MergeAllObjectsCamera) Name() resource.Name {
@@ -104,39 +164,63 @@ func (opc *MergeAllObjectsCamera) DoCommand(ctx context.Context, cmd map[string]
 	return nil, nil
 }
 
+type sourceFetchResult struct {
+	objects []*viz.Object
+	err     error
+}
+
 func (opc *MergeAllObjectsCamera) NextPointCloud(ctx context.Context, extra map[string]interface{}) (pointcloud.PointCloud, error) {
+	results := make([]sourceFetchResult, len(opc.sources))
+	var wg sync.WaitGroup
+	for i, src := range opc.sources {
+		wg.Add(1)
+		go func(i int, src mergeAllObjectsSource) {
+			defer wg.Done()
+			objects, err := src.svc.GetObjectPointClouds(ctx, "", extra)
+			results[i] = sourceFetchResult{objects: objects, err: err}
+		}(i, src)
+	}
+	wg.Wait()
+
 	inputs := []pointcloud.PointCloud{}
 	totalSize := 0
 
-	for _, svc := range opc.services {
-		objects, err := svc.GetObjectPointClouds(ctx, "", extra)
-		if err != nil {
-			opc.logger.Warnf("error getting object point clouds from %s: %v", svc.Name(), err)
+	for i, src := range opc.sources {
+		res := results[i]
+		if res.err != nil {
+			if src.minObjects > 0 {
+				return nil, fmt.Errorf("required vision service %s failed GetObjectPointClouds: %w", src.svc.Name(), res.err)
+			}
+			opc.logger.Warnf("error getting object point clouds from %s: %v", src.svc.Name(), res.err)
 			continue
 		}
 
-		for _, obj := range objects {
-			// Filter by label if configured.
+		count := 0
+		for _, obj := range res.objects {
 			if opc.cfg.Label != "" && obj.Geometry != nil {
 				if obj.Geometry.Label() != opc.cfg.Label {
 					continue
 				}
 			}
-
 			if obj.PointCloud == nil || obj.Size() == 0 {
 				continue
 			}
-
+			count++
 			totalSize += obj.Size()
 			inputs = append(inputs, obj.PointCloud)
+		}
+
+		if count < src.minObjects {
+			return nil, fmt.Errorf(
+				"vision service %s: got %d matching object(s), need at least %d",
+				src.svc.Name(), count, src.minObjects,
+			)
 		}
 	}
 
 	big := pointcloud.NewBasicPointCloud(totalSize)
-
 	for _, pc := range inputs {
-		err := pointcloud.ApplyOffset(pc, nil, big)
-		if err != nil {
+		if err := pointcloud.ApplyOffset(pc, nil, big); err != nil {
 			return nil, err
 		}
 	}
@@ -145,7 +229,6 @@ func (opc *MergeAllObjectsCamera) NextPointCloud(ctx context.Context, extra map[
 	if err != nil {
 		return nil, err
 	}
-
 	return cleaned, nil
 }
 

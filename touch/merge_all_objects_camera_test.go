@@ -19,45 +19,45 @@ import (
 
 func TestParseVisionServices(t *testing.T) {
 	t.Run("legacy string list is optional", func(t *testing.T) {
-		list, err := ParseVisionServices([]any{"left", "right"})
+		list, err := parseVisionServices([]any{"left", "right"})
 		test.That(t, err, test.ShouldBeNil)
-		test.That(t, list, test.ShouldResemble, VisionServiceSourceList{
-			{Name: "left", MinObjects: 0},
-			{Name: "right", MinObjects: 0},
+		test.That(t, list, test.ShouldResemble, []VisionServiceSource{
+			{Name: "left"},
+			{Name: "right"},
 		})
 	})
 
 	t.Run("object list with min_objects", func(t *testing.T) {
-		list, err := ParseVisionServices([]any{
+		list, err := parseVisionServices([]any{
 			map[string]any{"name": "left", "min_objects": 1},
 			map[string]any{"name": "right", "min_objects": float64(0)},
 		})
 		test.That(t, err, test.ShouldBeNil)
-		test.That(t, list, test.ShouldResemble, VisionServiceSourceList{
+		test.That(t, list, test.ShouldResemble, []VisionServiceSource{
 			{Name: "left", MinObjects: 1},
 			{Name: "right", MinObjects: 0},
 		})
 	})
 
 	t.Run("object list omits min_objects as zero", func(t *testing.T) {
-		list, err := ParseVisionServices([]any{map[string]any{"name": "only"}})
+		list, err := parseVisionServices([]any{map[string]any{"name": "only"}})
 		test.That(t, err, test.ShouldBeNil)
 		test.That(t, list[0].MinObjects, test.ShouldEqual, 0)
 	})
 
 	t.Run("rejects missing name", func(t *testing.T) {
-		_, err := ParseVisionServices([]any{map[string]any{"min_objects": 1}})
+		_, err := parseVisionServices([]any{map[string]any{"min_objects": 1}})
 		test.That(t, err, test.ShouldNotBeNil)
 	})
 
 	t.Run("mixed string and object entries", func(t *testing.T) {
-		list, err := ParseVisionServices([]any{
+		list, err := parseVisionServices([]any{
 			"left",
 			map[string]any{"name": "right", "min_objects": 1},
 		})
 		test.That(t, err, test.ShouldBeNil)
-		test.That(t, list, test.ShouldResemble, VisionServiceSourceList{
-			{Name: "left", MinObjects: 0},
+		test.That(t, list, test.ShouldResemble, []VisionServiceSource{
+			{Name: "left"},
 			{Name: "right", MinObjects: 1},
 		})
 	})
@@ -71,7 +71,7 @@ func TestMergeAllObjectsConfigTransformAttributeMapLegacyStrings(t *testing.T) {
 			"sam3-segmenter-left",
 			"sam3-segmenter-right",
 		},
-		"label":                 "stemless wine glass",
+		"label":                  "stemless wine glass",
 		"max_radius_from_center": 100,
 	}
 	cfg, err := resource.TransformAttributeMap[*MergeAllObjectsConfig](attrs)
@@ -88,9 +88,9 @@ func TestMergeAllObjectsConfigTransformAttributeMapLegacyStrings(t *testing.T) {
 	}
 	cfgObj, err := resource.TransformAttributeMap[*MergeAllObjectsConfig](attrsObj)
 	test.That(t, err, test.ShouldBeNil)
-	sources, err := ParseVisionServices(cfgObj.VisionServices)
+	sources, err := parseVisionServices(cfgObj.VisionServices)
 	test.That(t, err, test.ShouldBeNil)
-	test.That(t, sources, test.ShouldResemble, VisionServiceSourceList{
+	test.That(t, sources, test.ShouldResemble, []VisionServiceSource{
 		{Name: "left", MinObjects: 1},
 		{Name: "right", MinObjects: 1},
 	})

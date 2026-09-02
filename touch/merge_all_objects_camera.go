@@ -40,19 +40,8 @@ type VisionServiceSource struct {
 	MinObjects int    `json:"min_objects"`
 }
 
-type VisionServiceSourceList []VisionServiceSource
-
-func (l VisionServiceSourceList) Names() []string {
-	names := make([]string, len(l))
-	for i, s := range l {
-		names[i] = s.Name
-	}
-	return names
-}
-
-// MergeAllObjectsConfig attributes. VisionServices is []any so RDK's mapstructure
-// attribute decoder accepts both legacy string lists and {name,min_objects} objects.
-// encoding/json UnmarshalJSON alone is not enough — TransformAttributeMap does not use it.
+// VisionServices is []any so RDK's mapstructure decoder accepts both legacy
+// string lists and {name,min_objects} objects (UnmarshalJSON is not used).
 type MergeAllObjectsConfig struct {
 	VisionServices []any  `json:"vision_services"`
 	Label          string `json:"label"`
@@ -60,93 +49,45 @@ type MergeAllObjectsConfig struct {
 	pcclean.Config
 }
 
-// ParseVisionServices normalizes vision_services entries that arrive as either
-// strings ("left") or maps ({"name":"left","min_objects":1}).
-func ParseVisionServices(raw []any) (VisionServiceSourceList, error) {
-	if len(raw) == 0 {
-		return nil, nil
-	}
-	out := make(VisionServiceSourceList, 0, len(raw))
-	for i, entry := range raw {
-		src, err := parseVisionServiceEntry(i, entry)
+func parseVisionServices(raw []any) ([]VisionServiceSource, error) {
+	out := make([]VisionServiceSource, 0, len(raw))
+	for i, e := range raw {
+		if s, ok := e.(string); ok {
+			if s == "" {
+				return nil, fmt.Errorf("vision_services[%d]: name is required", i)
+			}
+			out = append(out, VisionServiceSource{Name: s})
+			continue
+		}
+		b, err := json.Marshal(e)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("vision_services[%d]: want string or {name,min_objects}", i)
+		}
+		var src VisionServiceSource
+		if err := json.Unmarshal(b, &src); err != nil || src.Name == "" {
+			return nil, fmt.Errorf("vision_services[%d]: want string or {name,min_objects}", i)
+		}
+		if src.MinObjects < 0 {
+			return nil, fmt.Errorf("vision_services[%d]: min_objects must be >= 0", i)
 		}
 		out = append(out, src)
 	}
 	return out, nil
 }
 
-func parseVisionServiceEntry(i int, entry any) (VisionServiceSource, error) {
-	switch v := entry.(type) {
-	case string:
-		if v == "" {
-			return VisionServiceSource{}, fmt.Errorf("vision_services[%d]: name is required", i)
-		}
-		return VisionServiceSource{Name: v, MinObjects: 0}, nil
-	case map[string]any:
-		name, _ := v["name"].(string)
-		if name == "" {
-			return VisionServiceSource{}, fmt.Errorf("vision_services[%d]: name is required", i)
-		}
-		minObjects, err := optionalIntAttr(v, "min_objects")
-		if err != nil {
-			return VisionServiceSource{}, fmt.Errorf("vision_services[%d]: %w", i, err)
-		}
-		if minObjects < 0 {
-			return VisionServiceSource{}, fmt.Errorf("vision_services[%d]: min_objects must be >= 0", i)
-		}
-		return VisionServiceSource{Name: name, MinObjects: minObjects}, nil
-	default:
-		// After JSON round-trip through some paths, maps may be map[string]interface{}
-		// already handled above; also accept typed structs from tests.
-		b, err := json.Marshal(entry)
-		if err != nil {
-			return VisionServiceSource{}, fmt.Errorf("vision_services[%d]: must be a string or object with name/min_objects", i)
-		}
-		var asString string
-		if err := json.Unmarshal(b, &asString); err == nil {
-			return parseVisionServiceEntry(i, asString)
-		}
-		var asMap map[string]any
-		if err := json.Unmarshal(b, &asMap); err == nil {
-			return parseVisionServiceEntry(i, asMap)
-		}
-		return VisionServiceSource{}, fmt.Errorf("vision_services[%d]: must be a string or object with name/min_objects", i)
-	}
-}
-
-func optionalIntAttr(m map[string]any, key string) (int, error) {
-	raw, ok := m[key]
-	if !ok || raw == nil {
-		return 0, nil
-	}
-	switch n := raw.(type) {
-	case int:
-		return n, nil
-	case int32:
-		return int(n), nil
-	case int64:
-		return int(n), nil
-	case float64:
-		return int(n), nil
-	case json.Number:
-		i, err := n.Int64()
-		return int(i), err
-	default:
-		return 0, fmt.Errorf("%s must be an integer", key)
-	}
-}
-
-func (c *MergeAllObjectsConfig) Validate(path string) ([]string, []string, error) {
-	sources, err := ParseVisionServices(c.VisionServices)
+func (c *MergeAllObjectsConfig) Validate(string) ([]string, []string, error) {
+	srcs, err := parseVisionServices(c.VisionServices)
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(sources) == 0 {
+	if len(srcs) == 0 {
 		return nil, nil, fmt.Errorf("need at least one vision service")
 	}
-	return sources.Names(), nil, nil
+	names := make([]string, len(srcs))
+	for i, s := range srcs {
+		names[i] = s.Name
+	}
+	return names, nil, nil
 }
 
 func newMergeAllObjects(ctx context.Context, deps resource.Dependencies, config resource.Config, logger logging.Logger) (camera.Camera, error) {
@@ -156,7 +97,7 @@ func newMergeAllObjects(ctx context.Context, deps resource.Dependencies, config 
 	}
 	pcclean.FillDefaults(&newConf.Config)
 
-	sources, err := ParseVisionServices(newConf.VisionServices)
+	sources, err := parseVisionServices(newConf.VisionServices)
 	if err != nil {
 		return nil, err
 	}

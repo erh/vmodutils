@@ -271,10 +271,8 @@ func writeFilesForPosition(ctx context.Context, traceID string, pos int, pc poin
 	return nil
 }
 
-func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service, writeFilesToCaptureDirectory bool) (pointcloud.PointCloud, error) {
+func GetPointCloudsFromPositions(ctx context.Context, positions []toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service, writeFilesToCaptureDirectory bool) ([]pointcloud.PointCloud, error) {
 	pcsInWorld := []pointcloud.PointCloud{}
-	totalSize := 0
-
 	// If a traceID is present, we will write files to a traceID sub-directory in the capture directory.
 	// Otherwise, we will write files at the top-level of the capture directory.
 	traceID := getTraceID(ctx)
@@ -292,8 +290,6 @@ func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswi
 		if err != nil {
 			return nil, err
 		}
-
-		totalSize += pc.Size()
 
 		// Transform this point cloud into the world frame
 		pif, err := fsSvc.GetPose(ctx, srcCamera.Name().Name, "", nil, nil)
@@ -318,12 +314,23 @@ func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswi
 			}
 		}
 	}
+	return pcsInWorld, nil
+}
+
+func MergedPointCloud(ctx context.Context, pcs []pointcloud.PointCloud, writeFilesToCaptureDirectory bool) (pointcloud.PointCloud, error) {
+	// If a traceID is present, we will write files to a traceID sub-directory in the capture directory.
+	// Otherwise, we will write files at the top-level of the capture directory.
+	traceID := getTraceID(ctx)
 
 	// Merge the individual pointclouds into one pointcloud
+	totalSize := 0
+	for _, pc := range pcs {
+		totalSize += pc.Size()
+	}
 
 	big := pointcloud.NewBasicPointCloud(totalSize)
-	for _, pcInWorld := range pcsInWorld {
-		err := pointcloud.ApplyOffset(pcInWorld, nil, big)
+	for _, pc := range pcs {
+		err := pointcloud.ApplyOffset(pc, nil, big)
 		if err != nil {
 			return nil, err
 		}
@@ -338,6 +345,14 @@ func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswi
 	}
 
 	return big, nil
+}
+
+func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service, writeFilesToCaptureDirectory bool) (pointcloud.PointCloud, error) {
+	pcs, err := GetPointCloudsFromPositions(ctx, positions, sleepTime, srcCamera, extraForCamera, fsSvc, writeFilesToCaptureDirectory)
+	if err != nil {
+		return nil, err
+	}
+	return MergedPointCloud(ctx, pcs, writeFilesToCaptureDirectory)
 }
 
 func buildWorldStateWithObstacles(ctx context.Context, visionSvcs []vision.Service) (*referenceframe.WorldState, error) {

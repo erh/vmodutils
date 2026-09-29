@@ -271,6 +271,18 @@ func writeFilesForPosition(ctx context.Context, traceID string, pos int, pc poin
 	return nil
 }
 
+// debugImages fetches the images saved alongside each position's point cloud. It asks for the
+// "color" source first because an unfiltered request makes structured-light cameras (e.g. Zivid)
+// run a full extra 2D+3D capture just to produce a depth image; cameras without a "color" source
+// fall back to the unfiltered request.
+func debugImages(ctx context.Context, cam camera.Camera) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+	images, md, err := cam.Images(ctx, []string{"color"}, nil)
+	if err == nil && len(images) > 0 {
+		return images, md, nil
+	}
+	return cam.Images(ctx, nil, nil)
+}
+
 func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service, writeFilesToCaptureDirectory bool) (pointcloud.PointCloud, error) {
 	pcsInWorld := []pointcloud.PointCloud{}
 	totalSize := 0
@@ -309,7 +321,7 @@ func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswi
 		pcsInWorld = append(pcsInWorld, pcInWorld)
 
 		if writeFilesToCaptureDirectory {
-			images, imagesMd, err := srcCamera.Images(ctx, nil, nil)
+			images, imagesMd, err := debugImages(ctx, srcCamera)
 			if err != nil {
 				return nil, fmt.Errorf("couldn't get images from camera: %w", err)
 			}
@@ -544,7 +556,7 @@ func GetMergedPointCloudFromMultiPositionSwitch(ctx context.Context, s toggleswi
 		pcsInWorld = append(pcsInWorld, pcInWorld)
 
 		if writeFilesToCaptureDirectory {
-			images, imagesMd, err := srcCamera.Images(ctx, nil, nil)
+			images, imagesMd, err := debugImages(ctx, srcCamera)
 			if err != nil {
 				return nil, fmt.Errorf("couldn't get images from camera: %w", err)
 			}

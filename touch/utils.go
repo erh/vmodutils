@@ -271,24 +271,25 @@ func writeFilesForPosition(ctx context.Context, captureSubDir string, pos int, p
 	return nil
 }
 
-func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service, writeFilesToCaptureDirectory bool, captureSubDirFormatString, captureSubDirMetadataKey string) (pointcloud.PointCloud, error) {
+func GetMergedPointCloudFromPositions(ctx context.Context, positions []toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service, writeFilesToCaptureDirectory, saveImages bool, captureSubDirFormatString, captureSubDirMetadataKey string) (pointcloud.PointCloud, error) {
 	moveTo := func(i int) error { return positions[i].SetPosition(ctx, 2, nil) }
-	return getMergedPointCloud(ctx, len(positions), moveTo, sleepTime, srcCamera, extraForCamera, fsSvc, writeFilesToCaptureDirectory, writeFilesToCaptureDirectory, captureSubDirFormatString, captureSubDirMetadataKey)
+	return getMergedPointCloud(ctx, len(positions), moveTo, sleepTime, srcCamera, extraForCamera, fsSvc, writeFilesToCaptureDirectory, saveImages, writeFilesToCaptureDirectory, captureSubDirFormatString, captureSubDirMetadataKey)
 }
 
-func GetMergedPointCloudFromMultiPositionSwitch(ctx context.Context, s toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service, writeFilesToCaptureDirectory bool, captureSubDirFormatString, captureSubDirMetadataKey string) (pointcloud.PointCloud, error) {
+func GetMergedPointCloudFromMultiPositionSwitch(ctx context.Context, s toggleswitch.Switch, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service, writeFilesToCaptureDirectory, saveImages bool, captureSubDirFormatString, captureSubDirMetadataKey string) (pointcloud.PointCloud, error) {
 	numPositions, _, err := s.GetNumberOfPositions(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	moveTo := func(i int) error { return s.SetPosition(ctx, uint32(i), nil) }
-	return getMergedPointCloud(ctx, int(numPositions), moveTo, sleepTime, srcCamera, extraForCamera, fsSvc, writeFilesToCaptureDirectory, false, captureSubDirFormatString, captureSubDirMetadataKey)
+	return getMergedPointCloud(ctx, int(numPositions), moveTo, sleepTime, srcCamera, extraForCamera, fsSvc, writeFilesToCaptureDirectory, saveImages, false, captureSubDirFormatString, captureSubDirMetadataKey)
 }
 
 // getMergedPointCloud moves to each of numPositions positions via moveTo, captures a point cloud at
-// each and merges them in the world frame. saveMerged additionally writes the merged cloud to the
-// capture directory.
-func getMergedPointCloud(ctx context.Context, numPositions int, moveTo func(i int) error, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service, writeFilesToCaptureDirectory, saveMerged bool, captureSubDirFormatString, captureSubDirMetadataKey string) (pointcloud.PointCloud, error) {
+// each and merges them in the world frame. With writeFilesToCaptureDirectory, each position's point
+// clouds and pose are saved; saveImages adds the camera's images, which costs a full extra 3D
+// capture per position on structured-light cameras such as Zivid; saveMerged adds the merged cloud.
+func getMergedPointCloud(ctx context.Context, numPositions int, moveTo func(i int) error, sleepTime time.Duration, srcCamera camera.Camera, extraForCamera map[string]any, fsSvc framesystem.Service, writeFilesToCaptureDirectory, saveImages, saveMerged bool, captureSubDirFormatString, captureSubDirMetadataKey string) (pointcloud.PointCloud, error) {
 	pcsInWorld := []pointcloud.PointCloud{}
 	totalSize := 0
 
@@ -326,9 +327,13 @@ func getMergedPointCloud(ctx context.Context, numPositions int, moveTo func(i in
 		pcsInWorld = append(pcsInWorld, pcInWorld)
 
 		if writeFilesToCaptureDirectory {
-			images, imagesMd, err := srcCamera.Images(ctx, nil, nil)
-			if err != nil {
-				return nil, fmt.Errorf("couldn't get images from camera: %w", err)
+			var images []camera.NamedImage
+			var imagesMd resource.ResponseMetadata
+			if saveImages {
+				images, imagesMd, err = srcCamera.Images(ctx, nil, nil)
+				if err != nil {
+					return nil, fmt.Errorf("couldn't get images from camera: %w", err)
+				}
 			}
 			if err := writeFilesForPosition(ctx, subDir, i, pc, pif, pcInWorld, images, imagesMd); err != nil {
 				return nil, err

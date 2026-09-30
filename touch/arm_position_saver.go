@@ -240,7 +240,7 @@ func (aps *ArmPositionSaver) goToSavePosition(ctx context.Context) error {
 	if len(aps.cfg.Joints) > 0 {
 		if aps.motion != nil {
 			goal := referenceframe.FrameSystemInputs{aps.arm.Name().Name: floatsToInputs(aps.cfg.Joints)}
-			return goToPositionUsingJointToJointMotion(ctx, goal, aps.arm.Name().Name, aps.motion, aps.visionServices, aps.cfg.Extra, aps.cfg.Constraints, aps.logger)
+			return goToPositionUsingJointToJointMotion(ctx, goal, aps.arm.Name().Name, aps.motion, aps.visionServices, aps.fsSvc, aps.cfg.Extra, aps.cfg.Constraints, aps.logger)
 		} else {
 			return goToPositionUsingMoveToJointPositions(ctx, aps.cfg.Joints, aps.arm, aps.cfg.moveOptions(), aps.cfg.Extra, aps.logger)
 		}

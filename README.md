@@ -19,6 +19,10 @@ The `erh:vmodutils` module bundles a few utility models for arm-based automation
 11. **`erh:vmodutils:calibration-checker`** — A sensor that compares world-frame positions of a shared AprilTag across two or more pose trackers to detect arm/camera drift.
 12. **`erh:vmodutils:session-capture`** — A sensor wired into the data manager's `capture_control_sensor` that toggles capture on/off for a list of components and tags clips with a session id.
 
+It also ships one **Viam application**:
+
+- **`arm-control`** — A browser app that lets you jog an arm with video-game controls expressed in the frame of an arm-mounted camera. See [Application: `arm-control`](#application-arm-control).
+
 ---
 
 ## Model: `erh:vmodutils:pc-crop-camera`
@@ -85,13 +89,16 @@ Runs a vision service's detector against the source camera, then crops the sourc
 
 **API:** `rdk:component:camera`
 
-Calls `GetObjectPointClouds` on a list of vision services, optionally filters by label, merges the resulting per-object point clouds into one, and runs an opt-out cleaning pipeline (statistical outlier removal → largest connected component → radius crop) to drop ground-plane halo and stray noise. Exposes the cleaned cloud via `NextPointCloud` and a 2D projection via `Images`.
+Calls `GetObjectPointClouds` on a list of vision services **in parallel**, optionally filters by label, merges the resulting per-object point clouds into one, and runs an opt-out cleaning pipeline (statistical outlier removal → largest connected component → radius crop) to drop ground-plane halo and stray noise. Exposes the cleaned cloud via `NextPointCloud` and a 2D projection via `Images`.
 
 ### Configuration
 
 ```json
 {
-  "vision_services": ["<vision service 1>", "<vision service 2>"],
+  "vision_services": [
+    { "name": "<vision service 1>", "min_objects": 1 },
+    { "name": "<vision service 2>", "min_objects": 1 }
+  ],
   "label": "<optional label filter>",
 
   "outlier_mean_k": 50,
@@ -104,9 +111,11 @@ Calls `GetObjectPointClouds` on a list of vision services, optionally filters by
 }
 ```
 
+A legacy string list (`["svc1","svc2"]`) is still accepted and treats every source as optional (`min_objects: 0`), matching the previous soft-fail behavior.
+
 | Name | Type | Required | Default | Description |
 | ---- | ---- | -------- | ------- | ----------- |
-| `vision_services` | string list | Yes | — | Source vision services. Each must implement `GetObjectPointClouds`. |
+| `vision_services` | list of strings or `{name, min_objects}` objects | Yes | — | Source vision services. Each must implement `GetObjectPointClouds`. Object form: `min_objects` is the minimum number of label-matching non-empty objects required from that source on each `NextPointCloud` (errors count as 0). `0` keeps soft-fail / skip. If any required source is short, the whole call fails. |
 | `label` | string | No | "" | If set, only objects whose `Geometry.Label()` equals this string are merged. |
 | `outlier_mean_k` | int | No | 50 | `meanK` for the statistical outlier filter. Set `<= 0` to disable this stage. |
 | `outlier_std_dev_thresh` | float | No | 2.0 | StdDev multiplier for the outlier filter — points whose mean kNN distance exceeds `mean + this * stddev` are dropped. |
@@ -243,7 +252,7 @@ Replay strategy:
   "motion": "<string>",
   "joints": [0, 0, 0, 0, 0, 0],
   "point": { "X": 0, "Y": 0, "Z": 500 },
-  "orientation": { "OX": 0, "OY": 0, "OZ": 1, "Theta": 0 },
+  "orientation": { "x": 0, "y": 0, "z": 1, "th": 0 },
   "vision_services": ["<string>"],
   "extra": { },
   "constraints": { }
@@ -256,7 +265,7 @@ Replay strategy:
 | `motion`          | string   | No       | Motion service name (typically `"builtin"`). When unset, the switch uses `arm.MoveToJointPositions` directly.    |
 | `joints`          | float[]  | No       | Saved joint positions (radians). Populated automatically by the "update config" position when `motion` is unset. |
 | `point`           | vector   | No       | Saved cartesian point (mm). Populated automatically by "update config" when `motion` is set.                     |
-| `orientation`     | object   | No       | Saved orientation as an `OrientationVectorDegrees` (`OX`, `OY`, `OZ`, `Theta`).                                  |
+| `orientation`     | object   | No       | Saved orientation as an `OrientationVectorDegrees` (`x`, `y`, `z`, `th`).                                        |
 | `vision_services` | string[] | No       | Vision services whose `GetObjectPointClouds` results are added to the world state passed to the motion service.  |
 | `extra`           | object   | No       | Arbitrary `extra` map forwarded to `motion.Move` / `arm.MoveToJointPositions`. May not contain `goal_state`.     |
 | `constraints`     | object   | No       | Motion constraints forwarded to `motion.Move` (only used when `motion` is set).                                  |
@@ -275,7 +284,7 @@ Returns:
 {
   "joints": [0, 0, 0, 0, 0, 0],
   "point": { "X": 0, "Y": 0, "Z": 500 },
-  "orientation": { "OX": 0, "OY": 0, "OZ": 1, "Theta": 0 },
+  "orientation": { "x": 0, "y": 0, "z": 1, "th": 0 },
   "as_json": "<full config as JSON string>"
 }
 ```
@@ -508,3 +517,57 @@ Returns:
 ```json
 { "status": "stopped" }
 ```
+
+---
+
+## Application: `arm-control`
+
+A self-contained browser app (`app-arm-control/index.html`) for driving an arm through a camera mounted on it — think video-game controls, but every motion is expressed in the **camera's own frame**. You pick the arm-mounted camera; pressing a control moves the arm so the camera translates or re-aims accordingly.
+
+### How it works
+
+There is no pose math in the app. For each control it sends a single `Move` request to the machine's motion service (default `builtin`) where:
+
+- the **component** being moved is the camera, and
+- the **destination** is a `PoseInFrame` whose `reference_frame` is the camera itself and whose pose is a small delta.
+
+Because the reference frame is the camera's current frame, "move forward 10 mm" is simply `pose = {z: 10}` — the motion service resolves the inverse kinematics and (collision-aware) planning to move whatever arm carries the camera. The camera must be part of the machine's frame system (i.e. rigidly attached to the arm), and a motion service must be configured.
+
+### Camera-frame convention
+
+Translations use the Viam camera convention: **+Z forward** (out of the lens), **+X right**, **+Y down**. If a particular camera's `+Z` points *into* the lens, tick **"invert forward axis."** Twist is a roll about the view axis; "look up/down" and "yaw" re-aim the view direction. Step sizes (translation mm, rotation degrees) are adjustable live.
+
+### Controls
+
+| Action | Button | Key |
+| ------ | ------ | --- |
+| Forward / Back | Forward / Back | `W` / `S` |
+| Strafe left / right | Strafe ◀ / ▶ | `A` / `D` |
+| Up / Down | Up / Down | `R` / `F` |
+| Twist (roll) ↺ / ↻ | Twist ↺ / ↻ | `Q` / `E` |
+| Look up / down (pitch) | Look up / down | `↑` / `↓` |
+| Yaw left / right | Yaw ◀ / ▶ | `←` / `→` |
+
+### Hand-tracking mode
+
+Optionally drive the arm with your **webcam** instead of buttons. Enable **Hand tracking**, grant camera access (this loads Google's MediaPipe hand model from a CDN), and a preview with hand landmarks appears.
+
+It uses **rate control** with a **hold-to-engage deadman**: press and hold the **HOLD TO DRIVE** button (or **Space**) to set a neutral point at your hand's current position, then move your hand — its offset from neutral sets the direction and speed of a camera-frame move:
+
+- left / right / up / down → strafe & up/down,
+- toward / away from the webcam → forward / back,
+- **pinch** (thumb + index) → close the gripper, open hand → open it (if a gripper is on the arm).
+
+Release the button/Space to stop immediately. Sliders tune max step (mm), dead-zone, and depth gain; per-axis invert checkboxes handle webcam/mount orientation. Motion reuses the same camera-frame path (and the same joint-limit safeguards) as the manual controls.
+
+### Running it
+
+When deployed as a Viam application, open the hosted app for your machine — the platform injects the machine host and API key, so it connects automatically.
+
+For local testing, open `app-arm-control/index.html` directly in a browser and either fill in the connection form or pass credentials as query params:
+
+```
+app-arm-control/index.html?host=<machine-address>.viam.cloud&api-key-id=<id>&api-key=<key>
+```
+
+The app loads the [Viam TypeScript SDK](https://ts.viam.dev) from a pinned ESM CDN, so an internet connection is required.

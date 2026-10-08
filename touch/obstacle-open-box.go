@@ -191,7 +191,7 @@ func (o *ObstacleOpenBox) Grab(ctx context.Context, extra map[string]interface{}
 			ComponentName: o.conf.ToMove,
 			Destination:   p,
 			Constraints: &motionplan.Constraints{
-				OrientationConstraint: []motionplan.OrientationConstraint{{180}},
+				OrientationConstraint: []motionplan.OrientationConstraint{{OrientationToleranceDegs: 180}},
 			},
 		})
 	if err != nil {

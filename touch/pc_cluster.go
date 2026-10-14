@@ -228,7 +228,14 @@ func (cs *ClusterService) Classifications(
 }
 
 func (cs *ClusterService) GetDetections3D(ctx context.Context, cameraName string, extra map[string]interface{}) ([]*detection3d.Detection, error) {
-	return nil, fmt.Errorf("not implemented")
+	if cameraName != "" && cameraName != cs.conf.Camera {
+		return nil, fmt.Errorf("bad cameraName %s", cameraName)
+	}
+
+	seg := func(ctx context.Context, src camera.Camera) ([]*viz.Object, error) {
+		return cs.segment(ctx, src, extra)
+	}
+	return detection3d.FromSegmenter(cs.name.ShortName(), seg)(ctx, cs.cam)
 }
 
 func (cs *ClusterService) GetObjectPointClouds(ctx context.Context, cameraName string, extra map[string]interface{}) ([]*viz.Object, error) {
@@ -236,7 +243,11 @@ func (cs *ClusterService) GetObjectPointClouds(ctx context.Context, cameraName s
 		return nil, fmt.Errorf("bad cameraName %s", cameraName)
 	}
 
-	pc, err := cs.cam.NextPointCloud(ctx, extra)
+	return cs.segment(ctx, cs.cam, extra)
+}
+
+func (cs *ClusterService) segment(ctx context.Context, src camera.Camera, extra map[string]interface{}) ([]*viz.Object, error) {
+	pc, err := src.NextPointCloud(ctx, extra)
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +272,8 @@ func (cs *ClusterService) GetObjectPointClouds(ctx context.Context, cameraName s
 
 func (cs *ClusterService) GetProperties(ctx context.Context, extra map[string]interface{}) (*vision.Properties, error) {
 	return &vision.Properties{
-		ObjectPCDsSupported: true,
+		ObjectPCDsSupported:   true,
+		Detections3DSupported: true,
 	}, nil
 }
 

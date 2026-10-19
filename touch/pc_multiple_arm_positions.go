@@ -119,7 +119,8 @@ func (mapc *MultipleArmPosesCamera) NextPointCloud(ctx context.Context, extra ma
 
 func (mapc *MultipleArmPosesCamera) Properties(ctx context.Context) (camera.Properties, error) {
 	return camera.Properties{
-		SupportsPCD: true,
+		SupportsPCD:           true,
+		DefaultReferenceFrame: "world",
 	}, nil
 }
 

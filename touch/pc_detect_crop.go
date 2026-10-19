@@ -107,7 +107,8 @@ func (dcc *detectCropCamera) Status(ctx context.Context) (map[string]interface{}
 
 func (dcc *detectCropCamera) Properties(ctx context.Context) (camera.Properties, error) {
 	return camera.Properties{
-		SupportsPCD: true,
+		SupportsPCD:           true,
+		DefaultReferenceFrame: dcc.props.DefaultReferenceFrame,
 	}, nil
 }
 

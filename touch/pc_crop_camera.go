@@ -185,6 +185,13 @@ func (cc *cropCamera) waitForPointCloudAfter(ctx context.Context, when time.Time
 	}
 }
 
+func (cc *cropCamera) srcFrame() string {
+	if cc.cfg.SrcFrame != "" {
+		return cc.cfg.SrcFrame
+	}
+	return cc.cfg.Src
+}
+
 func (cc *cropCamera) doNextPointCloud(ctx context.Context, extra map[string]interface{}) (pointcloud.PointCloud, error) {
 	start := time.Now()
 
@@ -195,10 +202,7 @@ func (cc *cropCamera) doNextPointCloud(ctx context.Context, extra map[string]int
 
 	timeA := time.Since(start)
 
-	srcFrame := cc.cfg.Src
-	if cc.cfg.SrcFrame != "" {
-		srcFrame = cc.cfg.SrcFrame
-	}
+	srcFrame := cc.srcFrame()
 
 	if !cc.cfg.CropInLocalFrame {
 		pc, err = cc.fs.TransformPointCloud(ctx, pc, srcFrame, "world")
@@ -228,11 +232,13 @@ func (cc *cropCamera) doNextPointCloud(ctx context.Context, extra map[string]int
 
 func (cc *cropCamera) Properties(ctx context.Context) (camera.Properties, error) {
 	props := camera.Properties{
-		SupportsPCD: true,
+		SupportsPCD:           true,
+		DefaultReferenceFrame: "world",
 	}
 	if !cc.cfg.TransformBackToSourceFrame && !cc.cfg.CropInLocalFrame {
 		return props, nil
 	}
+	props.DefaultReferenceFrame = cc.srcFrame()
 	srcProps, err := cc.src.Properties(ctx)
 	if err != nil {
 		return props, err

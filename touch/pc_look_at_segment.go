@@ -203,7 +203,8 @@ func (cc *lookAtCamera) doNextPointCloud(ctx context.Context, extra map[string]i
 
 func (cc *lookAtCamera) Properties(ctx context.Context) (camera.Properties, error) {
 	return camera.Properties{
-		SupportsPCD: true,
+		SupportsPCD:           true,
+		DefaultReferenceFrame: cc.srcProperties.DefaultReferenceFrame,
 	}, nil
 }
 

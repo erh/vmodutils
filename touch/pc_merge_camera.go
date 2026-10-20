@@ -131,18 +131,20 @@ func (mapc *MergeCamera) Properties(ctx context.Context) (camera.Properties, err
 	}
 	// Inputs are concatenated without transforming, so the merged frame is
 	// only known when every input camera reports the same one.
-	for i, c := range mapc.cameras {
+	first, err := mapc.cameras[0].Properties(ctx)
+	if err != nil {
+		return props, err
+	}
+	for _, c := range mapc.cameras[1:] {
 		p, err := c.Properties(ctx)
 		if err != nil {
 			return props, err
 		}
-		if i == 0 {
-			props.DefaultReferenceFrame = p.DefaultReferenceFrame
-		} else if p.DefaultReferenceFrame != props.DefaultReferenceFrame {
-			props.DefaultReferenceFrame = ""
-			break
+		if p.DefaultReferenceFrame != first.DefaultReferenceFrame {
+			return props, nil
 		}
 	}
+	props.DefaultReferenceFrame = first.DefaultReferenceFrame
 	return props, nil
 }
 

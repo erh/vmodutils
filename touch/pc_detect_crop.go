@@ -61,7 +61,7 @@ type detectCropCamera struct {
 	src     camera.Camera
 	service vision.Service
 
-	props camera.Properties
+	srcProperties camera.Properties
 }
 
 func newDetectCropCamera(ctx context.Context, deps resource.Dependencies, config resource.Config, logger logging.Logger) (camera.Camera, error) {
@@ -86,11 +86,11 @@ func newDetectCropCamera(ctx context.Context, deps resource.Dependencies, config
 		return nil, err
 	}
 
-	cc.props, err = cc.src.Properties(ctx)
+	cc.srcProperties, err = cc.src.Properties(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if cc.props.IntrinsicParams == nil {
+	if cc.srcProperties.IntrinsicParams == nil {
 		return nil, fmt.Errorf("no IntrinsicParams on %s", newConf.Src)
 	}
 
@@ -107,7 +107,8 @@ func (dcc *detectCropCamera) Status(ctx context.Context) (map[string]interface{}
 
 func (dcc *detectCropCamera) Properties(ctx context.Context) (camera.Properties, error) {
 	return camera.Properties{
-		SupportsPCD: true,
+		SupportsPCD:           true,
+		DefaultReferenceFrame: dcc.srcProperties.DefaultReferenceFrame,
 	}, nil
 }
 
@@ -149,7 +150,7 @@ func (dcc *detectCropCamera) NextPointCloud(ctx context.Context, extra map[strin
 		return nil, err
 	}
 
-	return PCDetectCrop(pc, detections, dcc.props)
+	return PCDetectCrop(pc, detections, dcc.srcProperties)
 }
 
 func PCDetectCrop(

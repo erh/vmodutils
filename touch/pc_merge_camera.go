@@ -126,9 +126,26 @@ func (mapc *MergeCamera) NextPointCloud(ctx context.Context, extra map[string]in
 }
 
 func (mapc *MergeCamera) Properties(ctx context.Context) (camera.Properties, error) {
-	return camera.Properties{
+	props := camera.Properties{
 		SupportsPCD: true,
-	}, nil
+	}
+	// Inputs are concatenated without transforming, so the merged frame is
+	// only known when every input camera reports the same one.
+	first, err := mapc.cameras[0].Properties(ctx)
+	if err != nil {
+		return props, err
+	}
+	for _, c := range mapc.cameras[1:] {
+		p, err := c.Properties(ctx)
+		if err != nil {
+			return props, err
+		}
+		if p.DefaultReferenceFrame != first.DefaultReferenceFrame {
+			return props, nil
+		}
+	}
+	props.DefaultReferenceFrame = first.DefaultReferenceFrame
+	return props, nil
 }
 
 func (mapc *MergeCamera) Geometries(ctx context.Context, _ map[string]interface{}) ([]spatialmath.Geometry, error) {

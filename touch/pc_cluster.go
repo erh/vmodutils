@@ -10,8 +10,10 @@ import (
 	"go.viam.com/rdk/components/camera"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/pointcloud"
+	"go.viam.com/rdk/referenceframe"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/services/vision"
+	"go.viam.com/rdk/spatialmath"
 	viz "go.viam.com/rdk/vision"
 	"go.viam.com/rdk/vision/classification"
 	"go.viam.com/rdk/vision/detection3d"
@@ -228,7 +230,57 @@ func (cs *ClusterService) Classifications(
 }
 
 func (cs *ClusterService) GetDetections3D(ctx context.Context, cameraName string, extra map[string]interface{}) ([]*detection3d.Detection, error) {
-	return nil, fmt.Errorf("not implemented")
+	if cameraName != "" && cameraName != cs.conf.Camera {
+		return nil, fmt.Errorf("bad cameraName %s", cameraName)
+	}
+
+	parent, err := cs.pointCloudFrame(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	objects, err := cs.segment(ctx, extra)
+	if err != nil {
+		return nil, err
+	}
+
+	prefix := cs.name.ShortName()
+	detections := make([]*detection3d.Detection, 0, len(objects))
+	for i, obj := range objects {
+		// Names are only unique within one call, since clustering does not track objects across calls.
+		name := fmt.Sprintf("%s/object-%d", prefix, i)
+		rootPose := spatialmath.NewZeroPose()
+		var rootGeom spatialmath.Geometry
+		if obj.Geometry != nil {
+			rootPose = obj.Geometry.Pose()
+			rootGeom = obj.Geometry.Transform(spatialmath.PoseInverse(rootPose))
+		}
+		transforms := []*referenceframe.LinkInFrame{referenceframe.NewLinkInFrame(parent, rootPose, name, rootGeom)}
+
+		if obj.PointCloud != nil && obj.PointCloud.Size() > 0 {
+			octree, err := pointcloud.ToBasicOctree(obj.PointCloud, 0)
+			if err != nil {
+				return nil, fmt.Errorf("object %d: %w", i, err)
+			}
+			points := octree.Transform(spatialmath.PoseInverse(rootPose))
+			transforms = append(transforms, referenceframe.NewLinkInFrame(name, spatialmath.NewZeroPose(), name+"/points", points))
+		}
+		detections = append(detections, &detection3d.Detection{Transforms: transforms})
+	}
+	return detections, nil
+}
+
+// pointCloudFrame returns the frame the camera's point clouds are expressed in: its default reference
+// frame when it reports one, otherwise the camera's own frame.
+func (cs *ClusterService) pointCloudFrame(ctx context.Context) (string, error) {
+	props, err := cs.cam.Properties(ctx)
+	if err != nil {
+		return "", fmt.Errorf("getting properties of camera %s: %w", cs.conf.Camera, err)
+	}
+	if props.DefaultReferenceFrame != "" {
+		return props.DefaultReferenceFrame, nil
+	}
+	return cs.cam.Name().ShortName(), nil
 }
 
 func (cs *ClusterService) GetObjectPointClouds(ctx context.Context, cameraName string, extra map[string]interface{}) ([]*viz.Object, error) {
@@ -236,6 +288,10 @@ func (cs *ClusterService) GetObjectPointClouds(ctx context.Context, cameraName s
 		return nil, fmt.Errorf("bad cameraName %s", cameraName)
 	}
 
+	return cs.segment(ctx, extra)
+}
+
+func (cs *ClusterService) segment(ctx context.Context, extra map[string]interface{}) ([]*viz.Object, error) {
 	pc, err := cs.cam.NextPointCloud(ctx, extra)
 	if err != nil {
 		return nil, err
@@ -261,7 +317,8 @@ func (cs *ClusterService) GetObjectPointClouds(ctx context.Context, cameraName s
 
 func (cs *ClusterService) GetProperties(ctx context.Context, extra map[string]interface{}) (*vision.Properties, error) {
 	return &vision.Properties{
-		ObjectPCDsSupported: true,
+		ObjectPCDsSupported:   true,
+		Detections3DSupported: true,
 	}, nil
 }
 
